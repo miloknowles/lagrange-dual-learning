@@ -11,24 +11,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_points_3d(points, coord_min, coord_max, downsample=None):
+def plot_points_3d(points1, points2, coord_min, coord_max, downsample=None):
   """
   Args:
     points (torch.Tensor) : Shape (num_points, 3).
     coord_min (float) : Used for setting axes min.
     coord_max (float) : Used for setting axes max.
   """
-  assert(len(points.shape) == 2)
-  assert(points.shape[1] == 3)
+  assert(len(points1.shape) == 2)
+  assert(points1.shape[1] == 3)
+
+  if points2 is not None:
+    assert(len(points2.shape) == 2)
+    assert(points2.shape[1] == 3)
 
   fig = plt.figure()
   ax = fig.add_subplot(111, projection='3d')
 
   if downsample is not None:
-    sample_indices = np.random.choice(len(points), size=downsample)
-    points = points[sample_indices]
+    sample_indices = np.random.choice(len(points1), size=downsample)
+    points1 = points1[sample_indices]
+    if points2 is not None: points2 = points2[sample_indices]
 
-  ax.scatter(points[:,0], points[:,1], points[:,2])
+  ax.scatter(points1[:,0], points1[:,1], points1[:,2], color="blue")
+
+  if points2 is not None:
+    ax.scatter(points2[:,0], points2[:,1], points2[:,2], color="red")
 
   ax.set_xlabel('X')
   ax.set_ylabel('Y')
@@ -85,9 +93,10 @@ class ProjectedPointDataset(Dataset):
 
 def project_to_plane(points, plane_normal, plane_offset):
   """
-  points (torch.Tensor) : Shape (N, 3)
-  plane_normal (torch.Tensor) : Shape (3)
-  plane_offset (float) : Distance from the origin to the plane along its normal vector.
+  Args:
+    points (torch.Tensor) : Shape (N, 3)
+    plane_normal (torch.Tensor) : Shape (3)
+    plane_offset (float) : Distance from the origin to the plane along its normal vector.
   """
   N, d = points.shape[0], points.shape[1]
   signed_plane_dist = torch.bmm(points.view(N, 1, d), plane_normal.unsqueeze(-1).unsqueeze(0).expand(N, -1, -1)).sum(axis=1) - plane_offset
@@ -95,19 +104,25 @@ def project_to_plane(points, plane_normal, plane_offset):
 
 
 def squared_distance_to_plane(points, plane_normal, plane_offset):
+  """
+  Args:
+    points (torch.Tensor) : Shape (N, 3)
+    plane_normal (torch.Tensor) : Shape (3)
+    plane_offset (float) : Distance from the origin to the plane along its normal vector.
+  """
   N, d = points.shape[0], points.shape[1]
   signed_plane_dist = torch.bmm(points.view(N, 1, d), plane_normal.unsqueeze(-1).unsqueeze(0).expand(N, -1, -1)).sum(axis=1) - plane_offset
   return signed_plane_dist**2
 
 
-def train(dimensions=3):
+def train():
   """
   Train a network to learn a projection function.
 
   min { ||x - x'||^2 }    ==> Minimize distance between x' and input point x.
   s.t. x^T p - d = 0      ==> Such that x' lies on a plane with normal p and offset d.
   """
-  torch.autograd.set_detect_anomaly(True)
+  dimensions=3
 
   device = torch.device("cuda")
   model = TwoLayerNetwork(dimensions, dimensions, hidden_units=40).to(device)
@@ -134,7 +149,7 @@ def train(dimensions=3):
   train_loader = DataLoader(train_dataset, batch_size, True, num_workers=2)
   val_loader = DataLoader(val_dataset, batch_size, False, num_workers=2)
 
-  # plot_points_3d(train_dataset.projected_points, dataset_dim_min, dataset_dim_max, downsample=1000)
+  plot_points_3d(train_dataset.projected_points, train_dataset.random_points, dataset_dim_min, dataset_dim_max, downsample=1000)
 
   # Just one planar constraint in this case, so a single multiplier.
   lamda = torch.ones(1).to(device)
@@ -158,7 +173,7 @@ def train(dimensions=3):
       p_hat = model(inputs["point_raw"])
 
       # Compute the loss using the current Lagrangian multipliers.
-      supervised_loss = (p_hat - inputs["point_projected"])**2
+      supervised_loss = (p_hat - inputs["point_raw"])**2
       constraint_violation = squared_distance_to_plane(p_hat, plane_normal, plane_offset)
       lagrange_loss = supervised_loss.mean() + lamda*constraint_violation.mean()
 
@@ -184,14 +199,19 @@ def train(dimensions=3):
     mean_constraint_violation = torch.zeros(len(val_loader))
     mean_lagrange_loss = torch.zeros(len(val_loader))
 
+    raw_points = []
+    proj_points = []
+
     with torch.no_grad():
       for vi, inputs in enumerate(val_loader):
         for key in inputs:
           inputs[key] = inputs[key].to(device)
 
         p_hat = model(inputs["point_raw"])
+        raw_points.append(inputs["point_raw"])
+        proj_points.append(p_hat)
 
-        supervised_loss = (p_hat - inputs["point_projected"])**2
+        supervised_loss = (p_hat - inputs["point_raw"])**2
         constraint_violation = squared_distance_to_plane(p_hat, plane_normal, plane_offset)
         lagrange_loss = supervised_loss.mean() + lamda*constraint_violation.mean()
 
@@ -201,6 +221,10 @@ def train(dimensions=3):
 
     print("Epoch {} | MSE Loss={} | Constraint Violation={} | Lagrange Loss={} | lambda={}".format(
         li, mean_supervised_loss.mean(), mean_constraint_violation.mean(), mean_lagrange_loss.mean(), lamda.item()))
+
+  raw_points = torch.cat(raw_points, dim=0)
+  proj_points = torch.cat(proj_points, dim=0)
+  plot_points_3d(proj_points.cpu().numpy(), raw_points.cpu().numpy(), dataset_dim_min, dataset_dim_max, downsample=1000)
 
 
 if __name__ == "__main__":
