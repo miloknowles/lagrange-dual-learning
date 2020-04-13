@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 import pydrake.symbolic as sym
 
@@ -40,6 +41,31 @@ def ForwardKinematicsThreeLink(theta):
   x3_ee[0] = Constants.R3_LENGTH1*np.cos(theta_0) + Constants.R3_LENGTH2*np.cos(theta_01) + Constants.R3_LENGTH3*np.cos(theta_012)
   x3_ee[1] = Constants.R3_LENGTH1*np.sin(theta_0) + Constants.R3_LENGTH2*np.sin(theta_01) + Constants.R3_LENGTH3*np.sin(theta_012)
   x3_ee[2] = theta_012
+
+  return x3_ee
+
+
+def ForwardKinematicsThreeLinkTorch(theta):
+  """
+  Forward kinematics math for the 3-link robot arm.
+
+  Args:
+    theta (torch.Tensor) : Shape (b, 3), contains the three joint angles of the robot arm.
+
+  Returns:
+    (torch.Tensor) of shape (b, 3) containing the resulting (x, y, theta) configuration of the EE.
+  """
+  assert(len(theta.shape) == 2)
+  assert(theta.shape[1] == 3)
+
+  x3_ee = torch.zeros_like(theta)
+  theta_0 = theta[:,0]
+  theta_01 = theta_0 + theta[:,1]
+  theta_012 = theta_01 + theta[:,2]
+
+  x3_ee[:,0] = Constants.R3_LENGTH1*torch.cos(theta_0) + Constants.R3_LENGTH2*torch.cos(theta_01) + Constants.R3_LENGTH3*torch.cos(theta_012)
+  x3_ee[:,1] = Constants.R3_LENGTH1*torch.sin(theta_0) + Constants.R3_LENGTH2*torch.sin(theta_01) + Constants.R3_LENGTH3*torch.sin(theta_012)
+  x3_ee[:,2] = theta_012
 
   return x3_ee
 
