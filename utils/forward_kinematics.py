@@ -59,15 +59,29 @@ def ForwardKinematicsThreeLinkTorch(theta):
   assert(theta.shape[1] == 3)
 
   x3_ee = torch.zeros_like(theta)
+  x2 = torch.zeros_like(theta)
+  x1 = torch.zeros_like(theta)
+
   theta_0 = theta[:,0]
   theta_01 = theta_0 + theta[:,1]
   theta_012 = theta_01 + theta[:,2]
 
-  x3_ee[:,0] = Constants.R3_LENGTH1*torch.cos(theta_0) + Constants.R3_LENGTH2*torch.cos(theta_01) + Constants.R3_LENGTH3*torch.cos(theta_012)
-  x3_ee[:,1] = Constants.R3_LENGTH1*torch.sin(theta_0) + Constants.R3_LENGTH2*torch.sin(theta_01) + Constants.R3_LENGTH3*torch.sin(theta_012)
-  x3_ee[:,2] = theta_012
+  # LINK 1
+  x1[:,0] = Constants.R3_LENGTH1*torch.cos(theta_0)
+  x1[:,1] = Constants.R3_LENGTH1*torch.sin(theta_0)
+  x1[:,2] = theta[:,0]
 
-  return x3_ee
+  # LINK 2
+  x2[:,0] = x1[:,0] + Constants.R3_LENGTH2*torch.cos(theta_01)
+  x2[:,1] = x1[:,1] + Constants.R3_LENGTH2*torch.sin(theta_01)
+  x2[:,2] = x1[:,2] + theta[:,1]
+
+  # LINK 3 (end effector)
+  x3_ee[:,0] = x2[:,0] + Constants.R3_LENGTH3*torch.cos(theta_012)
+  x3_ee[:,1] = x2[:,1] + Constants.R3_LENGTH3*torch.sin(theta_012)
+  x3_ee[:,2] = x2[:,2] + theta[:,2]
+
+  return x3_ee, x2, x1
 
 
 def ForwardKinematicsTwoLinkConstraint(theta):
