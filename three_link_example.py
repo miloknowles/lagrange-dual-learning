@@ -53,14 +53,14 @@ def train():
   train_iters = 500
   batch_size = 8
 
-  dataset_size = train_iters * batch_size
+  dataset_size = 16000
 
   train_dataset = JointAngleDataset(dataset_size, 3)
   val_dataset = JointAngleDataset(dataset_size, 3)
   train_loader = DataLoader(train_dataset, batch_size, True, num_workers=2)
   val_loader = DataLoader(val_dataset, batch_size, False, num_workers=2)
 
-  lamda = 40.0 * torch.ones(2).to(device)
+  lamda = 40.0 * torch.ones(4).to(device)
 
   optimizer = Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
   multiplier_lr = 1e-4
@@ -88,18 +88,31 @@ def train():
     joint_angle_l2 = 0.5 * pred_joint_theta**2
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
 
+    # Limit joint angles to +/- PI/2.
+    joint0_limit_violation = torch.abs(pred_joint_theta[:,0]) - (math.pi / 2)
+    joint1_limit_violation = torch.abs(pred_joint_theta[:,1]) - (math.pi / 2)
+    joint2_limit_violation = torch.abs(pred_joint_theta[:,2]) - (math.pi / 2)
+
     # TODO: add orientation constraint
-    lagrange_loss = joint_angle_l2.sum() + lamda[0]*position_err_sq.sum()
+    lagrange_loss = joint_angle_l2.sum() + \
+        lamda[0]*position_err_sq.sum() + \
+        lamda[1]*joint0_limit_violation.sum() + \
+        lamda[2]*joint1_limit_violation.sum() + \
+        lamda[3]*joint2_limit_violation.sum()
 
     outputs["joint_angle_l2"] = joint_angle_l2.sum()
-    outputs["position_err_sq"] = position_err_sq.sum()
+    outputs["constraint_violations"] = torch.Tensor([
+      position_err_sq.sum(),
+      joint0_limit_violation.sum(),
+      joint1_limit_violation.sum(),
+      joint2_limit_violation.sum()
+    ])
     outputs["lagrange_loss"] = lagrange_loss
 
     return outputs
 
   for li in range(lagrange_iters):
     # Train the model using the current Lagrange relaxation.
-
     ema = ExponentialMovingAverage(0, smoothing_factor=2)
 
     for ti, inputs in enumerate(train_loader):
@@ -107,7 +120,6 @@ def train():
         inputs[key] = inputs[key].to(device)
 
       outputs = process_batch(inputs)
-      # print(outputs["lagrange_loss"])
 
       model.zero_grad()
       outputs["lagrange_loss"].backward()
@@ -122,28 +134,29 @@ def train():
 
     # Aggregate constraint violations across all of the training examples.
     with torch.no_grad():
-      total_constraint_violations = torch.zeros(len(train_loader))
+      total_constraint_violations = torch.zeros(len(train_loader), len(lamda)).to(device)
+
       for ti, inputs in enumerate(train_loader):
         outputs = process_batch(inputs)
-        total_constraint_violations[ti] = outputs["position_err_sq"]
+        total_constraint_violations[ti,:] = outputs["constraint_violations"]
 
       # Do a single update on the Lagrange multipliers.
-      lamda = lamda + multiplier_lr*total_constraint_violations.sum()
+      lamda = lamda + multiplier_lr*total_constraint_violations.sum(axis=0)
 
     # Validate the model on a different sampling of points.
     mean_supervised_loss = torch.zeros(len(val_loader))
-    mean_constraint_violation = torch.zeros(len(val_loader))
+    mean_constraint_violation = torch.zeros(len(val_loader), len(lamda))
     mean_lagrange_loss = torch.zeros(len(val_loader))
 
     with torch.no_grad():
       for vi, inputs in enumerate(val_loader):
         outputs = process_batch(inputs)
         mean_supervised_loss[vi] = outputs["joint_angle_l2"]
-        mean_constraint_violation[vi] = outputs["position_err_sq"]
+        mean_constraint_violation[vi,:] = outputs["constraint_violations"]
         mean_lagrange_loss[vi] = outputs["lagrange_loss"]
 
-    print("Epoch {} | MSE Loss={:4f} | Constraint Violation={:4f} | Lagrange Loss={:4f} | lambda={:4f}".format(
-        li, mean_supervised_loss.mean(), mean_constraint_violation.mean(), mean_lagrange_loss.mean(), lamda[0].item()))
+    print("==> Epoch {}\n  MSE Loss={}\n  Constraints={}\n  Lagrange Loss={}\n  Multipliers={}".format(
+        li, mean_supervised_loss.mean(), mean_constraint_violation.mean(axis=0), mean_lagrange_loss.mean(), lamda))
 
 
 if __name__ == "__main__":
