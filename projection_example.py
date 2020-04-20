@@ -10,6 +10,8 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 import matplotlib.pyplot as plt
 import numpy as np
 
+from models.simple_networks import *
+
 
 def plot_points_3d(points1, points2, coord_min, coord_max, downsample=None):
   """
@@ -48,19 +50,6 @@ def plot_points_3d(points1, points2, coord_min, coord_max, downsample=None):
 
   plt.title("Distribution of 3D Points")
   plt.show()
-
-
-class TwoLayerNetwork(nn.Module):
-  def __init__(self, input_dim, output_dim, hidden_units=40):
-    super(TwoLayerNetwork, self).__init__()
-    self.fc1 = nn.Linear(input_dim, hidden_units, bias=True)
-    self.fc2 = nn.Linear(hidden_units, hidden_units, bias=True)
-    self.out = nn.Linear(hidden_units, output_dim, bias=True)
-
-  def forward(self, x):
-    out = F.relu(self.fc1(x))
-    out = F.relu(self.fc2(out))
-    return self.out(out)
 
 
 class ProjectedPointDataset(Dataset):
