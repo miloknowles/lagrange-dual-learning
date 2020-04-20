@@ -1,4 +1,4 @@
-import math
+import math, os
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -9,6 +9,8 @@ from utils.forward_kinematics import *
 from utils.ema import ExponentialMovingAverage
 from models.simple_networks import *
 from models.residual_network import *
+
+from tensorboardX import SummaryWriter
 
 
 class JointAngleDataset(Dataset):
@@ -34,6 +36,8 @@ class JointAngleDataset(Dataset):
 
 class IkOptions(object):
   def __init__(self):
+    self.log_dir = "/home/milo/lagrange-dual-learning/training_logs"
+    self.model_name = "three_link_reg"
     self.lagrange_iters = 1000
     self.train_iters = 500
     self.batch_size = 8
@@ -67,11 +71,17 @@ class IkLagrangeDualTrainer(object):
     self.optimizer = Adam(self.model.parameters(), lr=0.0001, betas=(0.9, 0.999))
     self.lamda = self.opt.initial_lambda * torch.ones(8).to(self.opt.device)
 
+    self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
+    os.makedirs(self.log_path, exist_ok=True)
+
+    self.writer = SummaryWriter(logdir=self.log_path)
+
     print("==> TRAINING SETTINGS:")
     print("Lagrange iters:\n  ", self.opt.lagrange_iters)
     print("Train iters:\n  ", self.opt.train_iters)
     print("Dataset size:\n  ", self.opt.dataset_size)
     print("Initial lagrange multipliers:\n  ", self.lamda)
+    print("Logging to:\n  ", self.log_path)
 
   def main(self):
     """
@@ -204,9 +214,27 @@ class IkLagrangeDualTrainer(object):
         mean_constraint_violation[vi,:] = outputs["constraint_violations"]
         mean_lagrange_loss[vi] = outputs["lagrange_loss"]
 
+    mean_constraint_violation = mean_constraint_violation.mean(axis=0)
+
     print("==> Epoch {}\n  Orig Loss={}\n  Constraints={}\n  Lagrange Loss={}\n  Multipliers={}".format(
-        epoch, mean_supervised_loss.mean(), mean_constraint_violation.mean(axis=0),
-        mean_lagrange_loss.mean(), lamda))
+        epoch, mean_supervised_loss.mean(), mean_constraint_violation, mean_lagrange_loss.mean(), lamda))
+
+    self.writer.add_scalar("loss/supervised", mean_supervised_loss.mean(), epoch)
+    self.writer.add_scalar("loss/lagrange", mean_lagrange_loss.mean(), epoch)
+
+    # Add all of the lagrange multipliers to a single plot.
+    self.writer.add_scalars(
+        "multipliers",
+        {str(mult_idx): mult_val for (mult_idx, mult_val) in enumerate(lamda)},
+        global_step=epoch)
+
+    # Add all of the constraints to a single plot.
+    self.writer.add_scalars(
+        "constraints",
+        {str(cst_idx): cst_val for (cst_idx, cst_val) in enumerate(mean_constraint_violation)},
+        global_step=epoch)
+
+    self.writer.close()
 
 
 if __name__ == "__main__":
