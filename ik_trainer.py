@@ -1,4 +1,4 @@
-import math, os
+import math, os, json
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -10,6 +10,7 @@ from utils.ema import ExponentialMovingAverage
 from models.simple_networks import *
 from models.residual_network import *
 
+import git
 from tensorboardX import SummaryWriter
 
 
@@ -34,19 +35,6 @@ class JointAngleDataset(Dataset):
     }
 
 
-class IkOptions(object):
-  def __init__(self):
-    self.log_dir = "/home/milo/lagrange-dual-learning/training_logs"
-    self.model_name = "three_link_reg"
-    self.lagrange_iters = 1000
-    self.train_iters = 500
-    self.batch_size = 8
-    self.dataset_size = 16000
-    self.device = torch.device("cuda")
-    self.multiplier_lr = 1e-4
-    self.initial_lambda = 40.0
-
-
 class IkLagrangeDualTrainer(object):
   """
   Train a network to approximate inverse kinematics solutions for a three link robotic arm.
@@ -55,24 +43,34 @@ class IkLagrangeDualTrainer(object):
   s.t. ||f(theta) - ee_desired|| = 0     ==> Such that end effector is at desired position.
   """
   def __init__(self, opt):
+    torch.backends.cudnn.benchmark = True
+
     self.opt = opt
+    self.device = torch.device("cuda")
 
     num_network_inputs = 3 # Gets a (desired_x, desired_y, desired_theta) input.
     num_network_outputs = 3 # Outpus angles for each joint.
-    # self.model = FourLayerNetwork(num_network_inputs, num_network_outpus, hidden_units=80).to(self.opt.device)
-    self.model = SixLayerNetwork(num_network_inputs, num_network_outputs, hidden_units=40).to(self.opt.device)
-    # self.model = ResidualNetwork(num_network_inputs, num_network_outpus, hidden_units=40).to(self.opt.device)
+    # self.model = FourLayerNetwork(num_network_inputs, num_network_outpus, hidden_units=80).to(`self.device`)
+    self.model = SixLayerNetwork(num_network_inputs, num_network_outputs, hidden_units=40).to(self.device)
+    # self.model = ResidualNetwork(num_network_inputs, num_network_outpus, hidden_units=40).to(self.device)
 
     train_dataset = JointAngleDataset(self.opt.dataset_size, 3)
     val_dataset = JointAngleDataset(self.opt.dataset_size, 3)
     self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=2)
     self.val_loader = DataLoader(val_dataset, self.opt.batch_size, False, num_workers=2)
 
-    self.optimizer = Adam(self.model.parameters(), lr=0.0001, betas=(0.9, 0.999))
-    self.lamda = self.opt.initial_lambda * torch.ones(8).to(self.opt.device)
+    self.optimizer = Adam(self.model.parameters(), lr=self.opt.optimizer_lr, betas=(0.9, 0.999))
+    self.lamda = self.opt.initial_lambda * torch.ones(8).to(self.device)
 
     self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
     os.makedirs(self.log_path, exist_ok=True)
+
+    # https://stackoverflow.com/questions/14989858/get-the-current-git-hash-in-a-python-script
+    repo = git.Repo(search_parent_directories=True)
+    sha = repo.head.object.hexsha
+    self.opt.commit_has = sha
+    with open(os.path.join(self.log_path, "opt.json"), "w") as f:
+      f.write(json.dumps(self.opt.__dict__, sort_keys=True, indent=4) + "\n")
 
     self.writer = SummaryWriter(logdir=self.log_path)
 
@@ -99,7 +97,7 @@ class IkLagrangeDualTrainer(object):
     outputs = {}
 
     for key in inputs:
-      inputs[key] = inputs[key].to(self.opt.device)
+      inputs[key] = inputs[key].to(self.device)
 
     pred_joint_theta = self.model(inputs["q_ee_desired"])
     outputs["pred_joint_theta"] = pred_joint_theta
@@ -165,7 +163,7 @@ class IkLagrangeDualTrainer(object):
 
     for ti, inputs in enumerate(self.train_loader):
       for key in inputs:
-        inputs[key] = inputs[key].to(self.opt.device)
+        inputs[key] = inputs[key].to(self.device)
 
       outputs = self.process_batch(inputs, lamda)
 
@@ -185,7 +183,7 @@ class IkLagrangeDualTrainer(object):
     """
     # Aggregate constraint violations across all of the training examples.
     with torch.no_grad():
-      total_constraint_violations = torch.zeros(len(self.train_loader), len(lamda)).to(self.opt.device)
+      total_constraint_violations = torch.zeros(len(self.train_loader), len(lamda)).to(self.device)
 
       for ti, inputs in enumerate(self.train_loader):
         outputs = self.process_batch(inputs, lamda)
@@ -235,9 +233,3 @@ class IkLagrangeDualTrainer(object):
         global_step=epoch)
 
     self.writer.close()
-
-
-if __name__ == "__main__":
-  opt = IkOptions()
-  trainer = IkLagrangeDualTrainer(opt)
-  trainer.main()
