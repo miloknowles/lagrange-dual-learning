@@ -6,6 +6,7 @@ python ../ik_trainer_main.py \
   --optimizer_lr 1e-4 \
   --initial_lambda 40 \
   --lagrange_iters 1000 \
-  --train_iters 100 \
+  --train_iters 500 \
   --batch_size 8 \
-  --dataset_size 44000 \
+  --train_dataset_size 44000 \
+  --val_dataset_size 4000 \

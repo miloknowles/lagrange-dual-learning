@@ -1,4 +1,4 @@
-import math, os, json
+import math, os, json, time
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -43,7 +43,7 @@ class JointAngleDataset(Dataset):
       mask_x = (self.random_ee[:,0] < x) | (self.random_ee[:,0] > (x+w))
       mask_y = (self.random_ee[:,1] < y) | (self.random_ee[:,1] > (y+h))
       valid_mask *= (mask_x & mask_y)
-    print("Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
+    print("NOTE: Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
 
     self.random_theta = self.random_theta[valid_mask]
     self.random_ee = self.random_ee[valid_mask]
@@ -65,7 +65,7 @@ class JointAngleDataset(Dataset):
     self.tensor_template = torch.cat(inputs_to_concat)
 
   def __len__(self):
-    return len(self.random_theta)
+    return self.random_theta.shape[0]
 
   def __getitem__(self, index):
     output = {}
@@ -139,7 +139,8 @@ class IkLagrangeDualTrainer(object):
     print("==> TRAINING SETTINGS:")
     print("Lagrange iters:\n  ", self.opt.lagrange_iters)
     print("Train iters:\n  ", self.opt.train_iters)
-    print("Dataset size:\n  ", self.opt.dataset_size)
+    print("Train dataset size:\n  ", self.opt.train_dataset_size)
+    print("Validation dataset size:\n", self.opt.val_dataset_size)
     print("Num workers:\n  ", self.opt.num_workers)
     print("Num Lagrange multipliers:\n  ", len(self.lamda))
     print("Initial multiplier values:\n  ", self.opt.initial_lambda)
@@ -149,20 +150,26 @@ class IkLagrangeDualTrainer(object):
     # print("==> PROBLEM CONSTRAINT CONFIGURATION:")
     # print(json.dumps(self.json_config, indent=2))
 
-    train_dataset = JointAngleDataset(self.opt.dataset_size, self.opt.num_links, self.json_config)
-    val_dataset = JointAngleDataset(self.opt.dataset_size, self.opt.num_links, self.json_config)
+    train_dataset = JointAngleDataset(self.opt.train_dataset_size, self.opt.num_links, self.json_config)
+    val_dataset = JointAngleDataset(self.opt.val_dataset_size, self.opt.num_links, self.json_config)
 
     self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
-    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, False, num_workers=self.opt.num_workers)
+    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
 
   def main(self):
     """
     Main training loop.
     """
     for epoch in range(self.opt.lagrange_iters):
+      epoch_start_time = time.time()
+
       self.train_with_relaxation(self.lamda)
+      train_time = time.time() - epoch_start_time
+
       self.lamda = self.update_multipliers(self.lamda)
-      self.validate(epoch, self.lamda)
+      mult_time = time.time() - epoch_start_time - train_time
+
+      self.validate(epoch, self.lamda, train_time, mult_time)
 
   def process_batch(self, inputs, lamda):
     """
@@ -238,9 +245,12 @@ class IkLagrangeDualTrainer(object):
     multipliers lambda.
     """
     # Train the self.model using the current Lagrange relaxation.
-    for ti, inputs in enumerate(self.train_loader):
-      outputs = self.process_batch(inputs, lamda)
+    # random_indices = torch.randperm(len(self.train_loader))[:self.opt.train_iters]
 
+    for ti, inputs in enumerate(self.train_loader):
+      if ti >= self.opt.train_iters:
+        break
+      outputs = self.process_batch(inputs, lamda)
       self.model.zero_grad()
       outputs["lagrange_loss"].backward()
       self.optimizer.step()
@@ -251,9 +261,9 @@ class IkLagrangeDualTrainer(object):
     """
     # Aggregate constraint violations across all of the training examples.
     with torch.no_grad():
-      total_constraint_violations = torch.zeros(len(self.train_loader), len(lamda)).to(self.device)
+      total_constraint_violations = torch.zeros(len(self.val_loader), len(lamda)).to(self.device)
 
-      for ti, inputs in enumerate(self.train_loader):
+      for ti, inputs in enumerate(self.val_loader):
         outputs = self.process_batch(inputs, lamda)
         total_constraint_violations[ti,:] = outputs["constraint_violations"]
 
@@ -265,7 +275,7 @@ class IkLagrangeDualTrainer(object):
 
     return lamda
 
-  def validate(self, epoch, lamda):
+  def validate(self, epoch, lamda, train_time, mult_time):
     """
     Test the model on a validation set to see if the constraint violation and loss is improving.
     """
@@ -282,8 +292,8 @@ class IkLagrangeDualTrainer(object):
 
     mean_constraint_violation = mean_constraint_violation.mean(axis=0)
 
-    print("==> Epoch {}\n  Orig Loss={}\n  Constraints={}\n  Lagrange Loss={}\n  Multipliers={}".format(
-        epoch, mean_supervised_loss.mean(), mean_constraint_violation, mean_lagrange_loss.mean(), lamda))
+    print("==> Epoch {} (Train Time = {} sec, Mult Time = {} sec)\n  Orig Loss={}\n  Constraints={}\n  Lagrange Loss={}\n  Multipliers={}".format(
+        epoch, train_time, mult_time, mean_supervised_loss.mean(), mean_constraint_violation, mean_lagrange_loss.mean(), lamda))
 
     self.writer.add_scalar("loss/supervised", mean_supervised_loss.mean(), epoch)
     self.writer.add_scalar("loss/lagrange", mean_lagrange_loss.mean(), epoch)
