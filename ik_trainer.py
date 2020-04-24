@@ -28,6 +28,8 @@ class JointAngleDataset(Dataset):
     joint_angle_min = json_config["static_constraints"]["joint_limits"][0]
     joint_angle_max = json_config["static_constraints"]["joint_limits"][1]
 
+    print("Joint angle limits:", joint_angle_min, joint_angle_max)
+
     self.random_theta = torch.empty(N, J).uniform_(joint_angle_min, joint_angle_max)
 
     forw_kinematics_function = {
@@ -46,8 +48,9 @@ class JointAngleDataset(Dataset):
       valid_mask *= (mask_x & mask_y)
     print("NOTE: Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
 
-    self.random_theta = self.random_theta[valid_mask]
-    self.random_ee = self.random_ee[valid_mask]
+    valid_indices = torch.from_numpy(np.argwhere(valid_mask.numpy())).squeeze(1)
+    self.random_theta = self.random_theta[valid_indices]
+    self.random_ee = self.random_ee[valid_indices]
 
     for i, params in enumerate(self.json_config["static_constraints"]["obstacles"]):
       output["obstacle_{}".format(i+1)] = torch.Tensor(params)
@@ -228,6 +231,7 @@ class IkLagrangeDualTrainer(object):
     outputs["joint_angle_l2"] = joint_angle_l2.mean()
 
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
+    # print(q_ee_actual, q_ee_desired)
 
     viol_to_concat = [position_err_sq.sum().unsqueeze(0)]
 

@@ -1,3 +1,7 @@
+# Clean up any previous training sessions under the same name.
+../cleanup.sh ik_threelink_base_01
+
+# Now run the training pipeline.
 python ../ik_trainer_main.py \
   --model_name ik_threelink_base_01 \
   --config_file ./resources/cfg_no_constraints.json \
