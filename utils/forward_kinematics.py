@@ -84,6 +84,33 @@ def ForwardKinematicsThreeLinkTorch(theta):
   return x3_ee, x2, x1
 
 
+def ForwardKinematicsEightLinkTorch(theta):
+  """
+  Forward kinematics math for the 8-link robot arm.
+
+  Args:
+    theta (torch.Tensor) : Shape (b, 8), contains the three joint angles of the robot arm.
+
+  Returns:
+    (torch.Tensor) of shape (b, 3) containing the resulting (x, y, theta) configuration of the EE.
+  """
+  assert(len(theta.shape) == 2)
+  assert(theta.shape[1] == 8)
+
+  links = [torch.zeros(batch_size, 3) for _ in range(8)]
+  links[0][:,0] = Constants.R8_LENGTH*torch.cos(theta[:,0])
+  links[0][:,1] = Constants.R8_LENGTH*torch.sin(theta[:,0])
+  links[0][:,2] = theta[:,0]
+
+  for i in range():
+    links[i][:,0] = links[i-1][:,0] + Constants.R8_LENGTH*torch.cos(theta[:,i] + links[i-1][:,2])
+    links[i][:,1] = links[i-1][:,1] + Constants.R8_LENGTH*torch.sin(theta[:,i] + links[i-1][:,2])
+    links[i][:,2] = theta[:,i] + links[i-1][:,2]
+
+  links.reverse()
+  return links
+
+
 def ForwardKinematicsTwoLinkConstraint(theta):
   """
   Does symbolic forward kinematics on the 2-link robot arm, useful for adding EE constraints to PyDrake.

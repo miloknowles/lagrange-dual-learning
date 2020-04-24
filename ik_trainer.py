@@ -15,18 +15,40 @@ from tensorboardX import SummaryWriter
 
 
 class JointAngleDataset(Dataset):
-  def __init__(self, N, J, seed=0):
+  def __init__(self, N, J, json_config, seed=0):
     super(JointAngleDataset, self).__init__()
     self.N = N    # The number of examples.
     self.J = J    # The number of links on this robot.
 
     # Generate N random points in R^J.
     torch.manual_seed(seed)
-    self.random_theta = torch.empty(N, J).uniform_(0, 2*math.pi)
-    self.random_ee, _, _ = ForwardKinematicsThreeLinkTorch(self.random_theta)
+
+    joint_angle_min = json_config["static_constraints"]["joint_limits"][0]
+    joint_angle_max = json_config["static_constraints"]["joint_limits"][1]
+
+    self.random_theta = torch.empty(N, J).uniform_(joint_angle_min, joint_angle_max)
+
+    forw_kinematics_function = {
+      3: ForwardKinematicsThreeLinkTorch,
+      8: ForwardKinematicsEightLinkTorch
+    }[J]
+
+    self.random_ee = forw_kinematics_function(self.random_theta)[0]
+
+    # Remove any examples that put the end effector inside of an obstacle.
+    valid_mask = torch.ones(len(self.random_ee)).long()
+    for static_obstacle in json_config["static_constraints"]["obstacles"]:
+      x, y, w, h = static_obstacle
+      mask_x = (self.random_ee[:,0] < x) | (self.random_ee[:,0] > (x+w))
+      mask_y = (self.random_ee[:,1] < y) | (self.random_ee[:,1] > (y+h))
+      valid_mask *= (mask_x & mask_y)
+    print("Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
+
+    self.random_theta = self.random_theta[valid_mask]
+    self.random_ee = self.random_ee[valid_mask]
 
   def __len__(self):
-    return self.N
+    return len(self.random_theta)
 
   def __getitem__(self, index):
     return {
@@ -49,15 +71,10 @@ class IkLagrangeDualTrainer(object):
     self.device = torch.device("cuda")
 
     num_network_inputs = 3 # Gets a (desired_x, desired_y, desired_theta) input.
-    num_network_outputs = 3 # Outpus angles for each joint.
-    # self.model = FourLayerNetwork(num_network_inputs, num_network_outpus, hidden_units=80).to(`self.device`)
-    self.model = SixLayerNetwork(num_network_inputs, num_network_outputs, hidden_units=40).to(self.device)
-    # self.model = ResidualNetwork(num_network_inputs, num_network_outpus, hidden_units=40).to(self.device)
 
-    train_dataset = JointAngleDataset(self.opt.dataset_size, 3)
-    val_dataset = JointAngleDataset(self.opt.dataset_size, 3)
-    self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=2)
-    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, False, num_workers=2)
+    # The network outputs a joint angle for each of the links.
+    self.model = SixLayerNetwork(num_network_inputs, self.opt.num_links, hidden_units=40).to(self.device)
+    # self.model = ResidualNetwork(num_network_inputs, num_network_outpus, hidden_units=40).to(self.device)
 
     self.optimizer = Adam(self.model.parameters(), lr=self.opt.optimizer_lr, betas=(0.9, 0.999))
     self.lamda = self.opt.initial_lambda * torch.ones(8).to(self.device)
@@ -80,6 +97,21 @@ class IkLagrangeDualTrainer(object):
     print("Dataset size:\n  ", self.opt.dataset_size)
     print("Initial lagrange multipliers:\n  ", self.lamda)
     print("Logging to:\n  ", self.log_path)
+    print("Loading config from:\n  ", self.opt.config_file)
+
+    config_file_path = os.path.join("/home/milo/lagrange-dual-learning/", self.opt.config_file)
+
+    with open(config_file_path, 'r') as f:
+      self.json_config = json.load(f)
+
+    print("==> PROBLEM CONSTRAINT CONFIGURATION:")
+    print(json.dumps(self.json_config, indent=2))
+
+    train_dataset = JointAngleDataset(self.opt.dataset_size, self.opt.num_links, self.json_config)
+    val_dataset = JointAngleDataset(self.opt.dataset_size, self.opt.num_links, self.json_config)
+
+    self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=2)
+    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, False, num_workers=2)
 
   def main(self):
     """

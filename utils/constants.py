@@ -11,3 +11,5 @@ class Constants:
   R3_LENGTH2 = 1.0
   R3_LENGTH3 = 1.0
 
+  # Eight-Link Robot Arm
+  R8_LENGTH = 1.0

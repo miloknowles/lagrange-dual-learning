@@ -1,0 +1,13 @@
+{
+  "static_constraints": {
+    "joint_limits": [-3.14159, 3.14159],
+    "obstacles": []
+  },
+  "dynamic_constraints": {
+    "random_ee_goal": true,
+    "random_obstacles": false,
+    "random_obstacles_num": 0,
+    "random_obstacle_width": 0,
+    "random_obstacle_height": 0
+  }
+}

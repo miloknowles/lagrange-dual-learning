@@ -18,6 +18,8 @@ class IkOptions(object):
     self.parser.add_argument("--multiplier_lr", type=float, default=1e-4, help="Update LR for the multipliers")
     self.parser.add_argument("--optimizer_lr", type=float, default=1e-4, help="Learning rate for Adam")
     self.parser.add_argument("--initial_lambda", type=float, default=40, help="Initial value for the Lagrange multipliers")
+    self.parser.add_argument("--num_links", type=int, default=3, choices=[3, 8], help="Number of links in the robotic arm")
+    self.parser.add_argument("--config_file", type=str, help="Path to the configuration file that specifies constraints")
 
   def parse(self):
     self.options = self.parser.parse_args()
