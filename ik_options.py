@@ -25,6 +25,7 @@ class IkOptions(object):
     self.parser.add_argument("--model_save_hz", type=int, default=200, help="Save the model after this many epochs")
     self.parser.add_argument("--load_weights_folder", type=str, default=None, help="Path containing a model.pth")
     self.parser.add_argument("--load_adam", action="store_true", default=False, help="Should the adam state be loaded?")
+    self.parser.add_argument("--hidden_units", type=int, default=40, help="The number of hidden units for each network layer")
 
   def parse(self):
     self.options = self.parser.parse_args()

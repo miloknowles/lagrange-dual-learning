@@ -27,3 +27,8 @@ def load_model(model, adam, model_path, adam_path):
     adam_dict.update(saved_adam_dict)
 
   return model, adam
+
+
+# From: https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/8
+def count_parameters(model):
+  return sum(p.numel() for p in model.parameters() if p.requires_grad)

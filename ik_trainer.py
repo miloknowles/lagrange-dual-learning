@@ -111,7 +111,8 @@ class IkLagrangeDualTrainer(object):
     num_network_inputs = 20
 
     # The network outputs a joint angle for each of the links.
-    self.model = SixLayerNetwork(num_network_inputs, self.opt.num_links, hidden_units=40).to(self.device)
+    self.model = EightLayerNetwork(num_network_inputs, self.opt.num_links, hidden_units=self.opt.hidden_units).to(self.device)
+    # self.model = SixLayerNetwork(num_network_inputs, self.opt.num_links, hidden_units=self.opt.hidden_units).to(self.device)
     # self.model = ResidualNetwork(num_network_inputs, num_network_outpus, hidden_units=40).to(self.device)
 
     self.optimizer = Adam(self.model.parameters(), lr=self.opt.optimizer_lr, betas=(0.9, 0.999))
@@ -119,10 +120,12 @@ class IkLagrangeDualTrainer(object):
     # Figure out how many constraints/multipliers will be needed. Store human-readable names for them.
     num_lagrange_multipliers = 1
     self.constraint_names = ["EE"]
-    if self.json_config["enforce_joint_limits"]:
+    if self.json_config["enforce_joint_limits"] == True:
+      print("NOTE: Enforcing joint limit constraints")
       num_lagrange_multipliers += self.opt.num_links
       self.constraint_names.extend(["JL{}".format(i+1) for i in range(self.opt.num_links)])
-    if self.json_config["enforce_obstacles"]:
+    if self.json_config["enforce_obstacles"] == True:
+      print("NOTE: Enforcing obstacle constraints")
       num_obstacles = len(self.json_config["static_constraints"]["obstacles"])
       num_lagrange_multipliers += 2*self.opt.num_links*num_obstacles
       for oi in range(num_obstacles):
@@ -145,6 +148,7 @@ class IkLagrangeDualTrainer(object):
     self.writer = SummaryWriter(logdir=self.log_path)
 
     print("========== TRAINING SETTINGS ==========")
+    print("Model parameters:\n  ", count_parameters(self.model))
     print("Lagrange iters:\n  ", self.opt.lagrange_iters)
     print("Train iters:\n  ", self.opt.train_iters)
     print("Train dataset size:\n  ", self.opt.train_dataset_size)
@@ -225,20 +229,22 @@ class IkLagrangeDualTrainer(object):
 
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
 
+    viol_to_concat = [position_err_sq.sum().unsqueeze(0)]
+
     # Optionally constraint joint angles to be within a certain range.
-    joint_limit_violations = torch.zeros(self.opt.num_links).to(self.device)
-    if self.json_config["enforce_joint_limits"]:
+    if self.json_config["enforce_joint_limits"] == True:
+      joint_limit_violations = torch.zeros(self.opt.num_links).to(self.device)
       middle_of_joint_limits = joint_limits.mean(axis=1)
       for joint_idx in range(self.opt.num_links):
         violation_this_joint = torch.abs(pred_joint_theta[:,joint_idx] - middle_of_joint_limits) - 0.5*middle_of_joint_limits
         joint_limit_violations[joint_idx] = violation_this_joint.sum()
+      viol_to_concat.append(joint_limit_violations)
 
     # Optionally constrain joints to avoid obstacles.
     num_obstacles = len([k for k in inputs if "obstacle" in k])
-    obstacle_violations = torch.zeros(2*self.opt.num_links*num_obstacles).to(self.device)
-
     ctr = 0
-    if self.json_config["enforce_obstacles"]:
+    if self.json_config["enforce_obstacles"] == True:
+      obstacle_violations = torch.zeros(2*self.opt.num_links*num_obstacles).to(self.device)
       for obst_idx in range(1, 5):
         if "obstacle_{}".format(obst_idx) in inputs:
           obstacle_params = inputs["obstacle_{}".format(obst_idx)]
@@ -251,9 +257,10 @@ class IkLagrangeDualTrainer(object):
             obstacle_violations[ctr] = viol_this_joint_x.sum()
             obstacle_violations[ctr+1] = viol_this_joint_y.sum()
             ctr += 2
+      viol_to_concat.append(obstacle_violations)
 
     # Combine all of the constraint violations into a 1D Tensor.
-    outputs["constraint_violations"] = torch.cat([position_err_sq.sum().unsqueeze(0), joint_limit_violations, obstacle_violations]).to(self.device)
+    outputs["constraint_violations"] = torch.cat(viol_to_concat).to(self.device)
 
     # Each constraint violation is weighted by its corresponding multiplier.
     outputs["lagrange_loss"] = (lamda * outputs["constraint_violations"]).sum()

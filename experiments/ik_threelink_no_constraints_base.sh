@@ -1,6 +1,6 @@
 python ../ik_trainer_main.py \
-  --model_name ik_threelink_reg \
-  --config_file ./resources/cfg_joint_limits.json \
+  --model_name ik_threelink_base_01 \
+  --config_file ./resources/cfg_no_constraints.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
   --optimizer_lr 1e-4 \
@@ -10,5 +10,5 @@ python ../ik_trainer_main.py \
   --batch_size 8 \
   --train_dataset_size 44000 \
   --val_dataset_size 4000 \
-  --model_save_hz 2 \
-  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_reg/models/weights_2 \
+  --model_save_hz 200 \
+  --hidden_units 100 \
