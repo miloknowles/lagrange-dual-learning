@@ -1,1 +1,1 @@
-rm -rf ./training_logs/$1
+rm -rf /home/milo/lagrange-dual-learning/training_logs/$1

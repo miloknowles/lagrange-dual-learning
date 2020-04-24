@@ -19,6 +19,7 @@ class JointAngleDataset(Dataset):
     super(JointAngleDataset, self).__init__()
     self.N = N    # The number of examples.
     self.J = J    # The number of links on this robot.
+    self.json_config = json_config
 
     # Generate N random points in R^J.
     torch.manual_seed(seed)
@@ -47,14 +48,33 @@ class JointAngleDataset(Dataset):
     self.random_theta = self.random_theta[valid_mask]
     self.random_ee = self.random_ee[valid_mask]
 
+    for i, params in enumerate(self.json_config["static_constraints"]["obstacles"]):
+      output["obstacle_{}".format(i+1)] = torch.Tensor(params)
+
+    joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"])
+
+    inputs_to_concat = [
+      torch.zeros(2),
+      joint_limits,
+      torch.zeros(16)
+    ]
+
+    for i, params in enumerate(self.json_config["static_constraints"]["obstacles"]):
+      inputs_to_concat[2][4*i:4*i+4] = torch.Tensor(params)
+
+    self.tensor_template = torch.cat(inputs_to_concat)
+
   def __len__(self):
     return len(self.random_theta)
 
   def __getitem__(self, index):
-    return {
-      "joint_theta": self.random_theta[index],
-      "q_ee_desired": self.random_ee[index]
-    }
+    output = {}
+    output["input_tensor"] = self.tensor_template.clone()
+    output["input_tensor"][0:2] = self.random_ee[index,:2]
+    output["joint_theta"] = self.random_theta[index]
+    output["q_ee_desired"] = self.random_ee[index]
+
+    return output
 
 
 class IkLagrangeDualTrainer(object):
@@ -63,21 +83,46 @@ class IkLagrangeDualTrainer(object):
 
   min { ||theta||^2 }                    ==> Minimize L2 norm of joint angles.
   s.t. ||f(theta) - ee_desired|| = 0     ==> Such that end effector is at desired position.
+
+  Network Inputs:
+   - desired x
+   - desired y
+   - joint limit min
+   - joint limit max
+   - obstacle 1 params (4)
+   - obstacle 2 params (4)
+   - obstacle 3 params (4)
+   - obstacle 4 params (4)
+
+  Total = 20
   """
   def __init__(self, opt):
     torch.backends.cudnn.benchmark = True
 
     self.opt = opt
+
+    config_file_path = os.path.join("/home/milo/lagrange-dual-learning/", self.opt.config_file)
+    with open(config_file_path, 'r') as f:
+      self.json_config = json.load(f)
+
     self.device = torch.device("cuda")
 
-    num_network_inputs = 3 # Gets a (desired_x, desired_y, desired_theta) input.
+    num_network_inputs = 20
 
     # The network outputs a joint angle for each of the links.
     self.model = SixLayerNetwork(num_network_inputs, self.opt.num_links, hidden_units=40).to(self.device)
     # self.model = ResidualNetwork(num_network_inputs, num_network_outpus, hidden_units=40).to(self.device)
 
     self.optimizer = Adam(self.model.parameters(), lr=self.opt.optimizer_lr, betas=(0.9, 0.999))
-    self.lamda = self.opt.initial_lambda * torch.ones(8).to(self.device)
+
+    num_lagrange_multipliers = 1
+    if self.json_config["enforce_joint_limits"]:
+      num_lagrange_multipliers += self.opt.num_links
+    if self.json_config["enforce_obstacles"]:
+      num_obstacles = len(self.json_config["static_constraints"]["obstacles"])
+      num_lagrange_multipliers += 2*self.opt.num_links*num_obstacles
+
+    self.lamda = self.opt.initial_lambda * torch.ones(num_lagrange_multipliers).to(self.device)
 
     self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
     os.makedirs(self.log_path, exist_ok=True)
@@ -95,23 +140,20 @@ class IkLagrangeDualTrainer(object):
     print("Lagrange iters:\n  ", self.opt.lagrange_iters)
     print("Train iters:\n  ", self.opt.train_iters)
     print("Dataset size:\n  ", self.opt.dataset_size)
-    print("Initial lagrange multipliers:\n  ", self.lamda)
+    print("Num workers:\n  ", self.opt.num_workers)
+    print("Num Lagrange multipliers:\n  ", len(self.lamda))
+    print("Initial multiplier values:\n  ", self.opt.initial_lambda)
     print("Logging to:\n  ", self.log_path)
     print("Loading config from:\n  ", self.opt.config_file)
 
-    config_file_path = os.path.join("/home/milo/lagrange-dual-learning/", self.opt.config_file)
-
-    with open(config_file_path, 'r') as f:
-      self.json_config = json.load(f)
-
-    print("==> PROBLEM CONSTRAINT CONFIGURATION:")
-    print(json.dumps(self.json_config, indent=2))
+    # print("==> PROBLEM CONSTRAINT CONFIGURATION:")
+    # print(json.dumps(self.json_config, indent=2))
 
     train_dataset = JointAngleDataset(self.opt.dataset_size, self.opt.num_links, self.json_config)
     val_dataset = JointAngleDataset(self.opt.dataset_size, self.opt.num_links, self.json_config)
 
-    self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=2)
-    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, False, num_workers=2)
+    self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
+    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, False, num_workers=self.opt.num_workers)
 
   def main(self):
     """
@@ -131,57 +173,62 @@ class IkLagrangeDualTrainer(object):
     for key in inputs:
       inputs[key] = inputs[key].to(self.device)
 
-    pred_joint_theta = self.model(inputs["q_ee_desired"])
+    this_batch_size = len(inputs["q_ee_desired"])
+
+    joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"]).unsqueeze(0).expand(this_batch_size, -1).to(self.device)
+
+    pred_joint_theta = self.model(inputs["input_tensor"])
     outputs["pred_joint_theta"] = pred_joint_theta
 
     q_ee_desired = inputs["q_ee_desired"]
-    q_ee_actual, q_joint1, q_joint0 = ForwardKinematicsThreeLinkTorch(pred_joint_theta)
+
+    forw_kinematics_function = {
+      3: ForwardKinematicsThreeLinkTorch,
+      8: ForwardKinematicsEightLinkTorch
+    }[self.opt.num_links]
+
+    q_all_joints = forw_kinematics_function(pred_joint_theta)
+    q_ee_actual = q_all_joints[0]
     outputs["q_ee_actual"] = q_ee_actual
 
     # Compute the loss using the current Lagrangian multipliers.
     joint_angle_l2 = 0.5 * pred_joint_theta**2
+    outputs["joint_angle_l2"] = joint_angle_l2.mean()
+
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
 
-    # Limit joint angles to +/- PI/2.
-    joint0_limit_violation = torch.abs(pred_joint_theta[:,0]) - (math.pi)
-    joint1_limit_violation = torch.abs(pred_joint_theta[:,1]) - (math.pi / 2)
-    joint2_limit_violation = torch.abs(pred_joint_theta[:,2]) - (math.pi / 2)
+    # Optionally constraint joint angles to be within a certain range.
+    joint_limit_violations = torch.zeros(self.opt.num_links).to(self.device)
+    if self.json_config["enforce_joint_limits"]:
+      middle_of_joint_limits = joint_limits.mean(axis=1)
+      for joint_idx in range(self.opt.num_links):
+        violation_this_joint = torch.abs(pred_joint_theta[:,joint_idx] - middle_of_joint_limits) - 0.5*middle_of_joint_limits
+        joint_limit_violations[joint_idx] = violation_this_joint.sum()
 
-    # Constrain all of the joints to avoid a box.
-    obstacle_xlimits = torch.Tensor([0.4, 0.6])
-    obstacle_ylimits = torch.Tensor([0.4, 0.6])
+    # Optionally constrain joints to avoid obstacles.
+    num_obstacles = len([k for k in inputs if "obstacle" in k])
+    obstacle_violations = torch.zeros(2*self.opt.num_links*num_obstacles).to(self.device)
 
-    # This makes the violation maximized at the center of the box, and decreasing to zero at the edges.
-    joint0_box_viol_x = obstacle_xlimits.mean() - torch.abs(q_joint0[0] - obstacle_xlimits.mean())
-    joint0_box_viol_y = obstacle_ylimits.mean() - torch.abs(q_joint0[1] - obstacle_ylimits.mean())
+    ctr = 0
+    if self.json_config["enforce_obstacles"]:
+      for obst_idx in range(1, 5):
+        if "obstacle_{}".format(obst_idx) in inputs:
+          obstacle_params = inputs["obstacle_{}".format(obst_idx)]
+          midpoint_x = obstacle_params[:,0] + 0.5*obstacle_params[:,2]
+          midpoint_y = obstacle_params[:,1] + 0.5*obstacle_params[:,3]
 
-    joint1_box_viol_x = obstacle_xlimits.mean() - torch.abs(q_joint1[0] - obstacle_xlimits.mean())
-    joint1_box_viol_y = obstacle_ylimits.mean() - torch.abs(q_joint1[1] - obstacle_ylimits.mean())
+          for joint_idx in range(self.opt.num_links):
+            viol_this_joint_x = 0.5*obstacle_params[:,2] - torch.abs(q_all_joints[joint_idx][:,0] - midpoint_x)
+            viol_this_joint_y = 0.5*obstacle_params[:,3] - torch.abs(q_all_joints[joint_idx][:,1] - midpoint_y)
+            obstacle_violations[ctr] = viol_this_joint_x.sum()
+            obstacle_violations[ctr+1] = viol_this_joint_y.sum()
+            ctr += 2
 
-    lagrange_loss = joint_angle_l2.sum() + \
-        lamda[0]*position_err_sq.sum() + \
-        lamda[1]*joint0_limit_violation.sum() + \
-        lamda[2]*joint1_limit_violation.sum() + \
-        lamda[3]*joint2_limit_violation.sum() + \
-        lamda[4]*joint0_box_viol_x.sum() + \
-        lamda[5]*joint0_box_viol_y.sum() + \
-        lamda[6]*joint1_box_viol_x.sum() + \
-        lamda[7]*joint1_box_viol_y.sum()
+    # Combine all of the constraint violations into a 1D Tensor.
+    outputs["constraint_violations"] = torch.cat([position_err_sq.sum().unsqueeze(0), joint_limit_violations, obstacle_violations]).to(self.device)
 
-    outputs["joint_angle_l2"] = joint_angle_l2.sum()
-
-    outputs["constraint_violations"] = torch.Tensor([
-      position_err_sq.sum(),
-      joint0_limit_violation.sum(),
-      joint1_limit_violation.sum(),
-      joint2_limit_violation.sum(),
-      joint0_box_viol_x.sum(),
-      joint0_box_viol_y.sum(),
-      lamda[6]*joint1_box_viol_x.sum(),
-      lamda[7]*joint1_box_viol_y.sum()
-    ])
-
-    outputs["lagrange_loss"] = lagrange_loss
+    # Each constraint violation is weighted by its corresponding multiplier.
+    outputs["lagrange_loss"] = (lamda * outputs["constraint_violations"]).sum()
 
     return outputs
 
@@ -191,23 +238,12 @@ class IkLagrangeDualTrainer(object):
     multipliers lambda.
     """
     # Train the self.model using the current Lagrange relaxation.
-    ema = ExponentialMovingAverage(0, smoothing_factor=2)
-
     for ti, inputs in enumerate(self.train_loader):
-      for key in inputs:
-        inputs[key] = inputs[key].to(self.device)
-
       outputs = self.process_batch(inputs, lamda)
 
       self.model.zero_grad()
       outputs["lagrange_loss"].backward()
       self.optimizer.step()
-
-      loss_detached = outputs["lagrange_loss"].detach().cpu().numpy().item()
-      if ti == 0:
-        ema.initialize(loss_detached)
-      else:
-        ema.update(ti, loss_detached)
 
   def update_multipliers(self, lamda):
     """

@@ -9,5 +9,7 @@
     "random_obstacles_num": 0,
     "random_obstacle_width": 0,
     "random_obstacle_height": 0
-  }
+  },
+  "enforce_joint_limits": true,
+  "enforce_obstacles": false
 }
