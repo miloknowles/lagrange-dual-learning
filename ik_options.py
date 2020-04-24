@@ -22,6 +22,9 @@ class IkOptions(object):
     self.parser.add_argument("--num_links", type=int, default=3, choices=[3, 8], help="Number of links in the robotic arm")
     self.parser.add_argument("--config_file", type=str, help="Path to the configuration file that specifies constraints")
     self.parser.add_argument("--num_workers", type=int, default=4, help="Number of data workers to fetch training samples")
+    self.parser.add_argument("--model_save_hz", type=int, default=200, help="Save the model after this many epochs")
+    self.parser.add_argument("--load_weights_folder", type=str, default=None, help="Path containing a model.pth")
+    self.parser.add_argument("--load_adam", action="store_true", default=False, help="Should the adam state be loaded?")
 
   def parse(self):
     self.options = self.parser.parse_args()

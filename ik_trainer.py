@@ -7,6 +7,7 @@ from torch.optim import Adam
 from utils.constants import Constants
 from utils.forward_kinematics import *
 from utils.ema import ExponentialMovingAverage
+from utils.training_utils import *
 from models.simple_networks import *
 from models.residual_network import *
 
@@ -115,12 +116,19 @@ class IkLagrangeDualTrainer(object):
 
     self.optimizer = Adam(self.model.parameters(), lr=self.opt.optimizer_lr, betas=(0.9, 0.999))
 
+    # Figure out how many constraints/multipliers will be needed. Store human-readable names for them.
     num_lagrange_multipliers = 1
+    self.constraint_names = ["EE"]
     if self.json_config["enforce_joint_limits"]:
       num_lagrange_multipliers += self.opt.num_links
+      self.constraint_names.extend(["JL{}".format(i+1) for i in range(self.opt.num_links)])
     if self.json_config["enforce_obstacles"]:
       num_obstacles = len(self.json_config["static_constraints"]["obstacles"])
       num_lagrange_multipliers += 2*self.opt.num_links*num_obstacles
+      for oi in range(num_obstacles):
+        for ji in range(self.opt.num_links):
+          self.constraint_names.append("OB{}_J{}".format(oi+1, ji+1))
+    assert(num_lagrange_multipliers == len(self.constraint_names))
 
     self.lamda = self.opt.initial_lambda * torch.ones(num_lagrange_multipliers).to(self.device)
 
@@ -136,7 +144,7 @@ class IkLagrangeDualTrainer(object):
 
     self.writer = SummaryWriter(logdir=self.log_path)
 
-    print("==> TRAINING SETTINGS:")
+    print("========== TRAINING SETTINGS ==========")
     print("Lagrange iters:\n  ", self.opt.lagrange_iters)
     print("Train iters:\n  ", self.opt.train_iters)
     print("Train dataset size:\n  ", self.opt.train_dataset_size)
@@ -145,7 +153,16 @@ class IkLagrangeDualTrainer(object):
     print("Num Lagrange multipliers:\n  ", len(self.lamda))
     print("Initial multiplier values:\n  ", self.opt.initial_lambda)
     print("Logging to:\n  ", self.log_path)
-    print("Loading config from:\n  ", self.opt.config_file)
+    print("Config file:\n  ", self.opt.config_file)
+    print("Load weights folder:\n  ", self.opt.load_weights_folder)
+    print("Load adam state?\n  ", self.opt.load_adam)
+    print("=======================================\n")
+
+    if self.opt.load_weights_folder is not None:
+      print("NOTE: Load weights path given, going to load model...")
+      load_model(self.model, self.optimizer if self.opt.load_adam else None,
+                os.path.join(self.opt.load_weights_folder, "model.pth"),
+                os.path.join(self.opt.load_weights_folder, "adam.pth"))
 
     # print("==> PROBLEM CONSTRAINT CONFIGURATION:")
     # print(json.dumps(self.json_config, indent=2))
@@ -170,6 +187,10 @@ class IkLagrangeDualTrainer(object):
       mult_time = time.time() - epoch_start_time - train_time
 
       self.validate(epoch, self.lamda, train_time, mult_time)
+
+      # Periodically save the model weights and Adam state.
+      if epoch % self.opt.model_save_hz == 0 and epoch > 0:
+        save_model(self.model, self.optimizer, os.path.join(self.log_path, "models"), epoch)
 
   def process_batch(self, inputs, lamda):
     """
@@ -292,7 +313,7 @@ class IkLagrangeDualTrainer(object):
 
     mean_constraint_violation = mean_constraint_violation.mean(axis=0)
 
-    print("==> Epoch {} (Train Time = {} sec, Mult Time = {} sec)\n  Orig Loss={}\n  Constraints={}\n  Lagrange Loss={}\n  Multipliers={}".format(
+    print("==> Epoch {} (Train Time = {:.3f} sec, Mult Time = {:.3f} sec)\n  Orig Loss={}\n  Constraints={}\n  Lagrange Loss={}\n  Multipliers={}".format(
         epoch, train_time, mult_time, mean_supervised_loss.mean(), mean_constraint_violation, mean_lagrange_loss.mean(), lamda))
 
     self.writer.add_scalar("loss/supervised", mean_supervised_loss.mean(), epoch)
@@ -301,13 +322,13 @@ class IkLagrangeDualTrainer(object):
     # Add all of the lagrange multipliers to a single plot.
     self.writer.add_scalars(
         "multipliers",
-        {str(mult_idx): mult_val for (mult_idx, mult_val) in enumerate(lamda)},
+        {self.constraint_names[mult_idx]: mult_val for (mult_idx, mult_val) in enumerate(lamda)},
         global_step=epoch)
 
     # Add all of the constraints to a single plot.
     self.writer.add_scalars(
         "constraints",
-        {str(cst_idx): cst_val for (cst_idx, cst_val) in enumerate(mean_constraint_violation)},
+        {self.constraint_names[cst_idx]: cst_val for (cst_idx, cst_val) in enumerate(mean_constraint_violation)},
         global_step=epoch)
 
     self.writer.close()
