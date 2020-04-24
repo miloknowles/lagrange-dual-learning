@@ -147,6 +147,11 @@ class IkLagrangeDualTrainer(object):
     self.opt.commit_has = sha
     with open(os.path.join(self.log_path, "opt.json"), "w") as f:
       f.write(json.dumps(self.opt.__dict__, sort_keys=True, indent=4) + "\n")
+    with open(os.path.join(self.log_path, "config.json"), "w") as f:
+      f.write(json.dumps(self.json_config, indent=4) + "\n")
+    with open(os.path.join(self.log_path, "constraint_names.txt"), "w") as f:
+      for i, name in enumerate(self.constraint_names):
+        f.write("{},{}\n".format(i, name))
 
     self.writer = SummaryWriter(logdir=self.log_path)
 
@@ -195,9 +200,10 @@ class IkLagrangeDualTrainer(object):
 
       self.validate(epoch, self.lamda, train_time, mult_time)
 
-      # Periodically save the model weights and Adam state.
+      # Periodically save the model weights, multipliers and Adam state.
       if epoch % self.opt.model_save_hz == 0 and epoch > 0:
         save_model(self.model, self.optimizer, os.path.join(self.log_path, "models"), epoch)
+        save_multipliers(self.lamda, os.path.join(self.log_path, "models"), epoch)
 
   def process_batch(self, inputs, lamda):
     """
