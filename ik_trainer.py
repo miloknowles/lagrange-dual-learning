@@ -64,7 +64,7 @@ class JointAngleDataset(Dataset):
       for i in range(len(self.random_ee)):
         q_all_joints_this_ex = [q[i] for q in q_all_joints]
         for obst_idx in range(num_obstacles):
-          random_xy = torch.empty(2).uniform_(-2 - width, 2)
+          random_xy = torch.empty(2).uniform_(-1.5 - width, 1.5)
           while not no_joint_collision(q_all_joints_this_ex, random_xy[0], random_xy[1], width, height):
             random_xy = torch.empty(2).uniform_(-2 - width, 2)
           self.random_obstacles[i,obst_idx,:2] = random_xy

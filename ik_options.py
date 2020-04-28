@@ -27,6 +27,10 @@ class IkOptions(object):
     self.parser.add_argument("--load_adam", action="store_true", default=False, help="Should the adam state be loaded?")
     self.parser.add_argument("--hidden_units", type=int, default=40, help="The number of hidden units for each network layer")
 
+    # Visualization / evaluation arguments.
+    self.parser.add_argument("--show_groundtruth_theta", action="store_true", default=False,
+                             help="If true, visualize the joint angles from the dataset instead of the network prediction")
+
   def parse(self):
     self.options = self.parser.parse_args()
     return self.options
