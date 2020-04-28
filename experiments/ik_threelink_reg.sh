@@ -1,3 +1,5 @@
+../cleanup.sh ik_threelink_reg
+
 python ../ik_trainer_main.py \
   --model_name ik_threelink_reg \
   --config_file ./resources/cfg_joint_limits.json \
@@ -11,4 +13,3 @@ python ../ik_trainer_main.py \
   --train_dataset_size 44000 \
   --val_dataset_size 4000 \
   --model_save_hz 2 \
-  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_reg/models/weights_2 \
