@@ -39,13 +39,16 @@ class JointAngleDataset(Dataset):
 
     self.random_ee = forw_kinematics_function(self.random_theta)[0]
 
+    q_all_joints = forw_kinematics_function(self.random_theta)
+
     # Remove any examples that put the end effector inside of an obstacle.
     valid_mask = torch.ones(len(self.random_ee)).long()
     for static_obstacle in json_config["static_constraints"]["obstacles"]:
       x, y, w, h = static_obstacle
-      mask_x = (self.random_ee[:,0] < x) | (self.random_ee[:,0] > (x+w))
-      mask_y = (self.random_ee[:,1] < y) | (self.random_ee[:,1] > (y+h))
-      valid_mask *= (mask_x & mask_y)
+      for q in q_all_joints:
+        mask_x = (q[:,0] < x) | (q[:,0] > (x+w))
+        mask_y = (q[:,1] < y) | (q[:,1] > (y+h))
+        valid_mask *= (mask_x & mask_y)
     print("NOTE: Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
 
     valid_indices = torch.from_numpy(np.argwhere(valid_mask.numpy())).squeeze(1)

@@ -1,6 +1,6 @@
 python visualize_ik_solutions.py \
-  --model_name ik_threelink_obs1_base_01 \
-  --config_file ./resources/cfg_joint_limits_and_1obs_static.json \
+  --model_name ik_threelink_obs4_base_01 \
+  --config_file ./resources/cfg_joint_limits_and_4obs_static.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
   --optimizer_lr 5e-5 \
@@ -12,4 +12,4 @@ python visualize_ik_solutions.py \
   --val_dataset_size 8000 \
   --model_save_hz 50 \
   --hidden_units 100 \
-  --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_obs1_base/weights_100 \
+  --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_obs4_base/weights_150 \
