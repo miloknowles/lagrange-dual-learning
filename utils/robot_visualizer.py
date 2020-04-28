@@ -68,6 +68,7 @@ class RobotVisualizer:
         self.diagram_context = diagram_context
         self.simulator = simulator
         self.vis = viz.vis
+        print("Finished initializing RobotVisualizer")
 
     def DrawRobot(self, q):
         assert len(q) == self.nq

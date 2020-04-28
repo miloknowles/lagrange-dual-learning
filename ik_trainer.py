@@ -178,11 +178,11 @@ class IkLagrangeDualTrainer(object):
     # print("==> PROBLEM CONSTRAINT CONFIGURATION:")
     # print(json.dumps(self.json_config, indent=2))
 
-    train_dataset = JointAngleDataset(self.opt.train_dataset_size, self.opt.num_links, self.json_config)
-    val_dataset = JointAngleDataset(self.opt.val_dataset_size, self.opt.num_links, self.json_config)
+    self.train_dataset = JointAngleDataset(self.opt.train_dataset_size, self.opt.num_links, self.json_config)
+    self.val_dataset = JointAngleDataset(self.opt.val_dataset_size, self.opt.num_links, self.json_config)
 
-    self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
-    self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
+    self.train_loader = DataLoader(self.train_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
+    self.val_loader = DataLoader(self.val_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
 
   def main(self):
     """
