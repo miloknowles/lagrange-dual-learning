@@ -52,9 +52,6 @@ class JointAngleDataset(Dataset):
     self.random_theta = self.random_theta[valid_indices]
     self.random_ee = self.random_ee[valid_indices]
 
-    for i, params in enumerate(self.json_config["static_constraints"]["obstacles"]):
-      output["obstacle_{}".format(i+1)] = torch.Tensor(params)
-
     joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"])
 
     inputs_to_concat = [
@@ -129,11 +126,13 @@ class IkLagrangeDualTrainer(object):
       self.constraint_names.extend(["JL{}".format(i+1) for i in range(self.opt.num_links)])
     if self.json_config["enforce_obstacles"] == True:
       print("NOTE: Enforcing obstacle constraints")
-      num_obstacles = len(self.json_config["static_constraints"]["obstacles"])
-      num_lagrange_multipliers += 2*self.opt.num_links*num_obstacles
-      for oi in range(num_obstacles):
+      num_static_obstacles = len(self.json_config["static_constraints"]["obstacles"])
+      print("NOTE: Found {} obstacles in config file".format(num_static_obstacles))
+      num_lagrange_multipliers += 2*self.opt.num_links*num_static_obstacles
+      for oi in range(num_static_obstacles):
         for ji in range(self.opt.num_links):
-          self.constraint_names.append("OB{}_J{}".format(oi+1, ji+1))
+          for x_or_y in ("x", "y"):
+            self.constraint_names.append("OB{}_J{}_{}".format(oi+1, ji+1, x_or_y))
     assert(num_lagrange_multipliers == len(self.constraint_names))
 
     self.lamda = self.opt.initial_lambda * torch.ones(num_lagrange_multipliers).to(self.device)
@@ -237,7 +236,6 @@ class IkLagrangeDualTrainer(object):
     outputs["joint_angle_l2"] = joint_angle_l2.mean()
 
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
-    # print(q_ee_actual, q_ee_desired)
 
     viol_to_concat = [position_err_sq.sum().unsqueeze(0)]
 
@@ -245,28 +243,30 @@ class IkLagrangeDualTrainer(object):
     if self.json_config["enforce_joint_limits"] == True:
       joint_limit_violations = torch.zeros(self.opt.num_links).to(self.device)
       middle_of_joint_limits = joint_limits.mean(axis=1)
+      joint_limit_range = torch.abs(joint_limits[:,1] - joint_limits[:,0])
       for joint_idx in range(self.opt.num_links):
-        violation_this_joint = torch.abs(pred_joint_theta[:,joint_idx] - middle_of_joint_limits) - 0.5*middle_of_joint_limits
+        # Negative if joints are within the joint limits and zero at limit. Positive outside.
+        violation_this_joint = torch.abs(pred_joint_theta[:,joint_idx] - middle_of_joint_limits) - 0.5*joint_limit_range
         joint_limit_violations[joint_idx] = violation_this_joint.sum()
       viol_to_concat.append(joint_limit_violations)
 
     # Optionally constrain joints to avoid obstacles.
-    num_obstacles = len([k for k in inputs if "obstacle" in k])
     ctr = 0
     if self.json_config["enforce_obstacles"] == True:
-      obstacle_violations = torch.zeros(2*self.opt.num_links*num_obstacles).to(self.device)
-      for obst_idx in range(1, 5):
-        if "obstacle_{}".format(obst_idx) in inputs:
-          obstacle_params = inputs["obstacle_{}".format(obst_idx)]
-          midpoint_x = obstacle_params[:,0] + 0.5*obstacle_params[:,2]
-          midpoint_y = obstacle_params[:,1] + 0.5*obstacle_params[:,3]
+      num_static_obstacles = len(self.json_config["static_constraints"]["obstacles"])
+      obstacle_violations = torch.zeros(2*self.opt.num_links*num_static_obstacles).to(self.device)
+      for obst_idx in range(num_static_obstacles):
+        obstacle_params = self.json_config["static_constraints"]["obstacles"][obst_idx]
+        midpoint_x = obstacle_params[0] + 0.5*obstacle_params[2]
+        midpoint_y = obstacle_params[1] + 0.5*obstacle_params[3]
 
-          for joint_idx in range(self.opt.num_links):
-            viol_this_joint_x = 0.5*obstacle_params[:,2] - torch.abs(q_all_joints[joint_idx][:,0] - midpoint_x)
-            viol_this_joint_y = 0.5*obstacle_params[:,3] - torch.abs(q_all_joints[joint_idx][:,1] - midpoint_y)
-            obstacle_violations[ctr] = viol_this_joint_x.sum()
-            obstacle_violations[ctr+1] = viol_this_joint_y.sum()
-            ctr += 2
+        for joint_idx in range(self.opt.num_links):
+          # Negative if joints are outside of obstacle, zero at boundary, positive inside.
+          viol_this_joint_x = 0.5*obstacle_params[2] - torch.abs(q_all_joints[joint_idx][:,0] - midpoint_x)
+          viol_this_joint_y = 0.5*obstacle_params[3] - torch.abs(q_all_joints[joint_idx][:,1] - midpoint_y)
+          obstacle_violations[ctr] = viol_this_joint_x.sum()
+          obstacle_violations[ctr+1] = viol_this_joint_y.sum()
+          ctr += 2
       viol_to_concat.append(obstacle_violations)
 
     # Combine all of the constraint violations into a 1D Tensor.
