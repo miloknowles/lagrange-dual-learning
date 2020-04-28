@@ -42,6 +42,12 @@ class JointAngleDataset(Dataset):
 
     dynamic_obstacles = json_config["dynamic_constraints"]["random_obstacles"]
 
+    def no_joint_collision(q_all_joints, x, y, w, h):
+      for q in q_all_joints:
+        if q[0] >= x and q[0] <= (x+w) and q[1] >= y and q[1] <= (y+h):
+          return False
+      return True
+
     # If obstacles are randomly generated, then we can place them around the joint to avoid collisions.
     self.random_obstacles = None
     if dynamic_obstacles:
@@ -53,12 +59,6 @@ class JointAngleDataset(Dataset):
       self.random_obstacles = torch.zeros(len(self.random_ee), 4, 4)
       self.random_obstacles[:,:,2] = width
       self.random_obstacles[:,:,3] = height
-
-      def no_joint_collision(q_all_joints, x, y, w, h):
-        for q in q_all_joints:
-          if q[0] >= x and q[0] <= (x+w) and q[1] >= y and q[1] <= (y+h):
-            return False
-        return True
 
       # For each training example, keep generating random obstacles until one isn't in collision.
       for i in range(len(self.random_ee)):
@@ -72,18 +72,27 @@ class JointAngleDataset(Dataset):
     # If obstacles are static, then remove any joint angles that would cause a collision.
     else:
       print("[DATASET] Filtering dataset with {} static obstacles".format(len(json_config["static_constraints"]["obstacles"])))
-      valid_mask = torch.ones(len(self.random_ee)).long()
-      for static_obstacle in json_config["static_constraints"]["obstacles"]:
-        x, y, w, h = static_obstacle
-        for q in q_all_joints:
-          mask_x = (q[:,0] < x) | (q[:,0] > (x+w))
-          mask_y = (q[:,1] < y) | (q[:,1] > (y+h))
-          valid_mask *= (mask_x & mask_y)
-      print("[DATASET] Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
+      for i in range(len(self.random_ee)):
+        q_all_joints_this_ex = [q[i].squeeze(0) for q in q_all_joints]
+        for static_obstacle in json_config["static_constraints"]["obstacles"]:
+          x, y, w, h = static_obstacle
+          while not no_joint_collision(q_all_joints_this_ex, x, y, w, h):
+            self.random_theta[i] = torch.empty(J).uniform_(joint_angle_min, joint_angle_max)
+            q_all_joints_this_ex = [q.squeeze(0) for q in forw_kinematics_function(self.random_theta[i].unsqueeze(0))]
+        self.random_ee[i] = q_all_joints_this_ex[0]
 
-      valid_indices = torch.from_numpy(np.argwhere(valid_mask.numpy())).squeeze(1)
-      self.random_theta = self.random_theta[valid_indices]
-      self.random_ee = self.random_ee[valid_indices]
+      # valid_mask = torch.ones(len(self.random_ee)).long()
+      # for static_obstacle in json_config["static_constraints"]["obstacles"]:
+      #   x, y, w, h = static_obstacle
+      #   for q in q_all_joints:
+      #     mask_x = (q[:,0] < x) | (q[:,0] > (x+w))
+      #     mask_y = (q[:,1] < y) | (q[:,1] > (y+h))
+      #     valid_mask *= (mask_x & mask_y)
+      # print("[DATASET] Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
+
+      # valid_indices = torch.from_numpy(np.argwhere(valid_mask.numpy())).squeeze(1)
+      # self.random_theta = self.random_theta[valid_indices]
+      # self.random_ee = self.random_ee[valid_indices]
 
     # Make a placeholder tensor that network inputs will be made out of.
     joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"])
@@ -308,7 +317,7 @@ class IkLagrangeDualTrainer(object):
         obstacle_params = inputs["dynamic_obstacles"] # Shape (b, 4, 4).
       else:
         num_obstacles = len(self.json_config["static_constraints"]["obstacles"])
-        obstacle_params = torch.Tensor(self.json_config["static_constraints"]["obstacles"])
+        obstacle_params = torch.Tensor(self.json_config["static_constraints"]["obstacles"]).to(self.device)
         obstacle_params = obstacle_params.unsqueeze(0).expand(this_batch_size, -1, -1) # Shape (b, 4, 4).
 
       # Handle static and dynamic objects with the same penalty.
