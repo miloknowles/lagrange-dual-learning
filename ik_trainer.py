@@ -1,4 +1,4 @@
-import math, os, json, time
+import math, os, json, time, pickle
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -15,13 +15,34 @@ import git
 from tensorboardX import SummaryWriter
 
 
-class JointAngleDataset(Dataset):
-  def __init__(self, N, J, json_config, seed=0):
-    super(JointAngleDataset, self).__init__()
+class IkDataset(Dataset):
+  def __init__(self, N, J, json_config, seed=0, cache_save_path=None):
+    super(IkDataset, self).__init__()
     self.N = N    # The number of examples.
     self.J = J    # The number of links on this robot.
     self.json_config = json_config
 
+    if cache_save_path is not None and os.path.exists(cache_save_path):
+      print("[DATASET] Found cached dataset at {}, loading from there!".format(cache_save_path))
+      load_dict = torch.load(cache_save_path)
+      self.random_theta = load_dict["random_theta"]
+      self.random_ee = load_dict["random_ee"]
+      self.random_obstacles = load_dict["random_obstacles"]
+      self.tensor_template = load_dict["tensor_template"]
+    else:
+      print("[DATASET] Initializing dataset from scratch...")
+      self.initialize(N, J, json_config, seed=0, cache_save_path=cache_save_path)
+
+      if cache_save_path is not None:
+        print("[DATASET] Saving the dataset to {}".format(cache_save_path))
+        save_dict = {}
+        save_dict["random_theta"] = self.random_theta
+        save_dict["random_ee"] = self.random_ee
+        save_dict["random_obstacles"] = self.random_obstacles
+        save_dict["tensor_template"] = self.tensor_template
+        torch.save(save_dict, cache_save_path)
+
+  def initialize(self, N, J, json_config, seed=0, cache_save_path=None):
     # Generate N random points in R^J.
     torch.manual_seed(seed)
 
@@ -80,19 +101,6 @@ class JointAngleDataset(Dataset):
             self.random_theta[i] = torch.empty(J).uniform_(joint_angle_min, joint_angle_max)
             q_all_joints_this_ex = [q.squeeze(0) for q in forw_kinematics_function(self.random_theta[i].unsqueeze(0))]
         self.random_ee[i] = q_all_joints_this_ex[0]
-
-      # valid_mask = torch.ones(len(self.random_ee)).long()
-      # for static_obstacle in json_config["static_constraints"]["obstacles"]:
-      #   x, y, w, h = static_obstacle
-      #   for q in q_all_joints:
-      #     mask_x = (q[:,0] < x) | (q[:,0] > (x+w))
-      #     mask_y = (q[:,1] < y) | (q[:,1] > (y+h))
-      #     valid_mask *= (mask_x & mask_y)
-      # print("[DATASET] Had to remove {} examples that violate obstacle constraints".format((valid_mask == 0).sum()))
-
-      # valid_indices = torch.from_numpy(np.argwhere(valid_mask.numpy())).squeeze(1)
-      # self.random_theta = self.random_theta[valid_indices]
-      # self.random_ee = self.random_ee[valid_indices]
 
     # Make a placeholder tensor that network inputs will be made out of.
     joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"])
@@ -235,9 +243,17 @@ class IkLagrangeDualTrainer(object):
 
     # print("==> PROBLEM CONSTRAINT CONFIGURATION:")
     # print(json.dumps(self.json_config, indent=2))
+    if self.opt.cache_save_path is not None:
+      cache_save_path_fmt = os.path.join(self.opt.cache_save_path, "{}_{}.pt")
+      cache_save_path_train = cache_save_path_fmt.format(self.opt.model_name, "train")
+      cache_save_path_val = cache_save_path_fmt.format(self.opt.model_name, "val")
+    else:
+      cache_save_path_train = cache_save_path_val = None
 
-    self.train_dataset = JointAngleDataset(self.opt.train_dataset_size, self.opt.num_links, self.json_config)
-    self.val_dataset = JointAngleDataset(self.opt.val_dataset_size, self.opt.num_links, self.json_config)
+    self.train_dataset = IkDataset(self.opt.train_dataset_size, self.opt.num_links, self.json_config,
+                                   cache_save_path=cache_save_path_train)
+    self.val_dataset = IkDataset(self.opt.val_dataset_size, self.opt.num_links, self.json_config,
+                                 cache_save_path=cache_save_path_val)
 
     self.train_loader = DataLoader(self.train_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
     self.val_loader = DataLoader(self.val_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)

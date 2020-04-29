@@ -7,7 +7,7 @@ python ../ik_trainer_main.py \
   --config_file ./resources/cfg_joint_limits.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
-  --optimizer_lr 1e-4 \
+  --optimizer_lr 5e-5 \
   --initial_lambda 20 \
   --lagrange_iters 1000 \
   --train_iters 500 \

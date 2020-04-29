@@ -26,6 +26,8 @@ class IkOptions(object):
     self.parser.add_argument("--load_weights_folder", type=str, default=None, help="Path containing a model.pth")
     self.parser.add_argument("--load_adam", action="store_true", default=False, help="Should the adam state be loaded?")
     self.parser.add_argument("--hidden_units", type=int, default=40, help="The number of hidden units for each network layer")
+    self.parser.add_argument("--cache_save_path", type=str, default=None,
+                             help="If given, load/save the dataset to the specified path for fast loading in the future")
 
     # Visualization / evaluation arguments.
     self.parser.add_argument("--show_groundtruth_theta", action="store_true", default=False,
@@ -33,4 +35,8 @@ class IkOptions(object):
 
   def parse(self):
     self.options = self.parser.parse_args()
+    return self.options
+
+  def parse_default(self):
+    self.options = self.parser.parse_args(["--model_name default"])
     return self.options
