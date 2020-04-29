@@ -67,6 +67,10 @@ class IkDataset(Dataset):
       for q in q_all_joints:
         if q[0] >= x and q[0] <= (x+w) and q[1] >= y and q[1] <= (y+h):
           return False
+
+      if 0 >= x and 0 <= (x+w) and 0 >= y and 0 <= (y+h):
+        return False
+
       return True
 
     # If obstacles are randomly generated, then we can place them around the joint to avoid collisions.
@@ -75,7 +79,7 @@ class IkDataset(Dataset):
       num_obstacles = json_config["dynamic_constraints"]["random_obstacles_num"]
       width = json_config["dynamic_constraints"]["random_obstacle_width"]
       height = json_config["dynamic_constraints"]["random_obstacle_height"]
-      print("[DATASET] Generating {} random obstacles for each example".format(num_obstacles))
+      print("[DATASET] Generating {} random obstacles for each example (w={} h={})".format(num_obstacles, width, height))
 
       self.random_obstacles = torch.zeros(len(self.random_ee), 4, 4)
       self.random_obstacles[:,:,2] = width
@@ -87,7 +91,7 @@ class IkDataset(Dataset):
         for obst_idx in range(num_obstacles):
           random_xy = torch.empty(2).uniform_(-1.5 - width, 1.5)
           while not no_joint_collision(q_all_joints_this_ex, random_xy[0], random_xy[1], width, height):
-            random_xy = torch.empty(2).uniform_(-2 - width, 2)
+            random_xy = torch.empty(2).uniform_(-1.5 - width, 1.5)
           self.random_obstacles[i,obst_idx,:2] = random_xy
 
     # If obstacles are static, then remove any joint angles that would cause a collision.

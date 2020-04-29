@@ -1,5 +1,5 @@
 python visualize_ik_solutions.py \
-  --model_name ik_threelink_obs4_dynamic_base_01 \
+  --model_name ik_threelink_4obs_dynamic_02 \
   --config_file ./resources/cfg_joint_limits_and_4obs_dynamic.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
@@ -12,5 +12,5 @@ python visualize_ik_solutions.py \
   --val_dataset_size 4000 \
   --model_save_hz 50 \
   --hidden_units 100 \
-  --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_obs4_base/weights_150 \
+  --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_obs4_dynamic_base/weights_200 \
   --show_groundtruth_theta \
