@@ -37,35 +37,55 @@ def visualize(opt, trainer):
       # NOTE: I think the origin of the object is its center? So need to add half width and height.
       shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
 
+  position_err = []
+  constraint_viol = []
+
   with torch.no_grad():
     for i, inputs in enumerate(trainer.val_dataset):
       print("Processing example {}...".format(i+1))
       for key in inputs:
         inputs[key] = inputs[key].to(trainer.device).unsqueeze(0)
 
+      # if i == 100:
+        # break
+
       outputs = trainer.process_batch(inputs, trainer.lamda)
       joint_angles = outputs["pred_joint_theta"].squeeze(0).cpu().numpy()
       joint_angles_gt = inputs["joint_theta"].squeeze(0).cpu().numpy()
       print("Predicted joint angles:", joint_angles)
 
-      if opt.show_groundtruth_theta:
-        rviz.DrawRobot(joint_angles_gt)
-      else:
-        rviz.DrawRobot(joint_angles)
+      position_err.append(torch.sqrt(outputs["position_err_sq"]))
+      constraint_viol.append(outputs["constraint_violations"].unsqueeze(0))
 
-      if random_obstacles:
-        assert("dynamic_obstacles" in inputs)
+      if not opt.no_plot:
+        if opt.show_groundtruth_theta:
+          rviz.DrawRobot(joint_angles_gt)
+        else:
+          rviz.DrawRobot(joint_angles)
 
-        for j in range(random_obstacles_num):
-          obst_name = "obst_{}".format(j+1)
-          x, y, w, h = inputs["dynamic_obstacles"].squeeze(0)[j].cpu().numpy().tolist()
-          shapes[obst_name].set_object(g.Box([0.1, w, h]))
-          shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
+        if random_obstacles:
+          assert("dynamic_obstacles" in inputs)
+
+          for j in range(random_obstacles_num):
+            obst_name = "obst_{}".format(j+1)
+            x, y, w, h = inputs["dynamic_obstacles"].squeeze(0)[j].cpu().numpy().tolist()
+            shapes[obst_name].set_object(g.Box([0.1, w, h]))
+            shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
 
       ee_desired_position = inputs["q_ee_desired"].squeeze(0)[:2].cpu().numpy()
-      rviz.DrawTarget(ee_desired_position, radius=0.2)
 
-      plt.waitforbuttonpress(timeout=-1)
+      if not opt.no_plot:
+        rviz.DrawTarget(ee_desired_position, radius=0.2)
+        plt.waitforbuttonpress(timeout=-1)
+
+  position_err = torch.cat(position_err).flatten().mean().cpu()
+  constraint_viol = torch.cat(constraint_viol).cpu()
+  num_violations = (constraint_viol > 1e-4).sum(axis=0)
+
+  for i, name in enumerate(trainer.constraint_names):
+    print("{} | {} | {}%".format(name, num_violations[i], float(num_violations[i]) / len(trainer.val_dataset)))
+
+  print("Avg position error =", position_err)
 
 
 if __name__ == "__main__":

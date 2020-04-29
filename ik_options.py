@@ -31,7 +31,8 @@ class IkOptions(object):
 
     # Visualization / evaluation arguments.
     self.parser.add_argument("--show_groundtruth_theta", action="store_true", default=False,
-                             help="If true, visualize the joint angles from the dataset instead of the network prediction")
+                             help="If True, visualize the joint angles from the dataset instead of the network prediction")
+    self.parser.add_argument("--no_plot", action="store_true", default=False, help="If True, skipping plotting during evaluation")
 
   def parse(self):
     self.options = self.parser.parse_args()

@@ -314,6 +314,7 @@ class IkLagrangeDualTrainer(object):
     outputs["joint_angle_l2"] = joint_angle_l2.mean()
 
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
+    outputs["position_err_sq"] = position_err_sq
 
     viol_to_concat = [position_err_sq.sum().unsqueeze(0)]
 
