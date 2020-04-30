@@ -1,4 +1,5 @@
 import unittest
+import math
 import torch
 
 from utils.training_utils import *
@@ -36,6 +37,16 @@ class TrainingUtilsTest(unittest.TestCase):
     self.assertAlmostEqual(vx[4].item(), -0.15, places=3)
     self.assertAlmostEqual(vy[4].item(), 0)
 
+  def test_piecewise_joint_limit_penalty(self):
+    theta = torch.Tensor([-math.pi, math.pi, 0, 0.1])
+    limit_min = torch.Tensor([-2*math.pi / 3])
+    limit_max = torch.Tensor([2*math.pi / 3])
+    viol = piecewise_joint_limit_penalty(theta, limit_min, limit_max, inside_slope=0.1, outside_slope=1.0)
+
+    self.assertAlmostEqual(viol[0].item(), math.pi / 3)
+    self.assertAlmostEqual(viol[1].item(), math.pi / 3)
+    self.assertAlmostEqual(viol[2].item(), -0.1*2*math.pi / 3)
+    self.assertAlmostEqual(viol[3].item(), -0.1*2*math.pi / 3 + 0.1*0.1)
 
 if __name__ == "__main__":
   unittest.main()
