@@ -5,7 +5,8 @@ import unittest
 import os
 
 sys.path.append("/home/milo/lagrange-dual-learning")
-from ik_trainer import IkDataset, IkLagrangeDualTrainer
+from ik_trainer import IkLagrangeDualTrainer
+from ik_dataset import IkDataset
 from ik_options import IkOptions
 
 
