@@ -28,6 +28,8 @@ class IkOptions(object):
     self.parser.add_argument("--hidden_units", type=int, default=40, help="The number of hidden units for each network layer")
     self.parser.add_argument("--cache_save_path", type=str, default=None,
                              help="If given, load/save the dataset to the specified path for fast loading in the future")
+    self.parser.add_argument("--penalty_bad_slope", type=float, default=1.0, help="Slope for piecewise linear constraint penalties.")
+    self.parser.add_argument("--penalty_good_slope", type=float, default=0.1, help="Slope for piecewise linear constraint penalties.")
 
     # Visualization / evaluation arguments.
     self.parser.add_argument("--show_groundtruth_theta", action="store_true", default=False,
@@ -39,5 +41,10 @@ class IkOptions(object):
     return self.options
 
   def parse_default(self):
-    self.options = self.parser.parse_args(["--model_name default"])
+    self.options = self.parser.parse_args(
+      ["--model_name", "default",
+       "--config_file", "/home/milo/lagrange-dual-learning/resources/cfg_joint_limits_and_4obs_static.json",
+       "--train_dataset_size", "1000",
+       "--val_dataset_size", "100",
+       "--train_iters", "10"])
     return self.options

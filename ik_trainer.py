@@ -324,7 +324,8 @@ class IkLagrangeDualTrainer(object):
       for joint_idx in range(self.opt.num_links):
         joint_limit_violations[joint_idx] = piecewise_joint_limit_penalty(
           pred_joint_theta[:,joint_idx], joint_limits[:,0], joint_limits[:,1],
-          inside_slope=0.1, outside_slope=1.0).sum()
+          inside_slope=self.opt.penalty_good_slope,
+          outside_slope=self.opt.penalty_bad_slope).sum()
       viol_to_concat.append(joint_limit_violations)
 
     # Optionally constrain joints to avoid obstacles.
@@ -348,7 +349,8 @@ class IkLagrangeDualTrainer(object):
           viol_this_joint_x, viol_this_joint_y = piecewise_obstacle_penalty(
             q_all_joints[joint_idx][:,0], q_all_joints[joint_idx][:,1],
             params[:,0], params[:,1], params[:,2], params[:,3],
-            inside_slope=1.0, outside_slope=0.1)
+            inside_slope=self.opt.penalty_bad_slope,
+            outside_slope=self.opt.penalty_good_slope)
           obstacle_violations[ctr] = viol_this_joint_x.sum()
           obstacle_violations[ctr+1] = viol_this_joint_y.sum()
           ctr += 2

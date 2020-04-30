@@ -14,6 +14,6 @@ python ../ik_trainer_main.py \
   --batch_size 8 \
   --train_dataset_size 44000 \
   --val_dataset_size 4000 \
-  --model_save_hz 50 \
+  --model_save_hz 25 \
   --hidden_units 100 \
   --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_base/weights_200 \

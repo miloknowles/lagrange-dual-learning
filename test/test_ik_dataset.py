@@ -5,8 +5,8 @@ import unittest
 import os
 
 sys.path.append("/home/milo/lagrange-dual-learning")
-
-from ik_trainer import IkDataset
+from ik_trainer import IkDataset, IkLagrangeDualTrainer
+from ik_options import IkOptions
 
 
 class IkDatasetTest(unittest.TestCase):
@@ -28,6 +28,21 @@ class IkDatasetTest(unittest.TestCase):
     for i, inputs in enumerate(dataset):
       print(inputs["input_tensor"])
 
+  def test_random_loader(self):
+    opt = IkOptions().parse_default()
+    trainer = IkLagrangeDualTrainer(opt)
+
+    unique_examples = set()
+
+    for epoch in range(10):
+      print("Doing epoch {}".format(epoch+1))
+      for ti, inputs in enumerate(trainer.train_loader):
+        if ti > 10:
+          break
+        print(ti, inputs["q_ee_desired"][0])
+        unique_examples.add(str(inputs["q_ee_desired"]))
+
+    print("Unique batches:", len(unique_examples))
 
 if __name__ == "__main__":
   unittest.main()
