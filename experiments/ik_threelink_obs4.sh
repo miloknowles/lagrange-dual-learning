@@ -9,7 +9,7 @@ python ../ik_trainer_main.py \
   --multiplier_lr 1e-4 \
   --optimizer_lr 5e-5 \
   --initial_lambda 1 \
-  --lagrange_iters 500 \
+  --lagrange_iters 1000 \
   --train_iters 500 \
   --batch_size 8 \
   --train_dataset_size 40000 \
