@@ -82,10 +82,22 @@ def visualize(opt, trainer):
   constraint_viol = torch.cat(constraint_viol).cpu()
   num_violations = (constraint_viol > 1e-4).sum(axis=0)
 
+  # How often are any of the joint limits violated?
+  joint_limit_indices = [i for i in range(len(trainer.constraint_names)) if "JL" in trainer.constraint_names[i]]
+  joint_limit_violated = (constraint_viol[:,joint_limit_indices] > 0)
+  any_joint_limit_violated = (joint_limit_violated.sum(axis=1) > 0).sum().item()
+
+  # How often are any of the obstacles violated?
+  obstacle_indices = [i for i in range(len(trainer.constraint_names)) if "OB" in trainer.constraint_names[i]]
+  obstacle_violated = (constraint_viol[:,obstacle_indices] > 0)
+  any_obstacle_violated = (obstacle_violated.sum(axis=1) > 0).sum().item()
+
   for i, name in enumerate(trainer.constraint_names):
     print("{} | {} | {}%".format(name, num_violations[i], float(num_violations[i]) / len(trainer.val_dataset)))
 
   print("Avg position error =", position_err)
+  print("Joint limit (%) =", float(any_joint_limit_violated) / len(trainer.val_dataset))
+  print("Obstacle (%)=", float(any_obstacle_violated) / len(trainer.val_dataset))
 
 
 if __name__ == "__main__":

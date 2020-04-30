@@ -321,12 +321,10 @@ class IkLagrangeDualTrainer(object):
     # Optionally constraint joint angles to be within a certain range.
     if self.json_config["enforce_joint_limits"] == True:
       joint_limit_violations = torch.zeros(self.opt.num_links).to(self.device)
-      middle_of_joint_limits = joint_limits.mean(axis=1)
-      joint_limit_range = torch.abs(joint_limits[:,1] - joint_limits[:,0])
       for joint_idx in range(self.opt.num_links):
-        # Negative if joints are within the joint limits and zero at limit. Positive outside.
-        violation_this_joint = torch.abs(pred_joint_theta[:,joint_idx] - middle_of_joint_limits) - 0.5*joint_limit_range
-        joint_limit_violations[joint_idx] = violation_this_joint.sum()
+        joint_limit_violations[joint_idx] = piecewise_joint_limit_penalty(
+          pred_joint_theta[:,joint_idx], joint_limits[:,0], joint_limits[:,1],
+          inside_slope=0.1, outside_slope=1.0).sum()
       viol_to_concat.append(joint_limit_violations)
 
     # Optionally constrain joints to avoid obstacles.
@@ -346,13 +344,11 @@ class IkLagrangeDualTrainer(object):
 
       for obst_idx in range(num_obstacles):
         params = obstacle_params[:,obst_idx]
-        midpoint_x = params[:,0] + 0.5*params[:,2]
-        midpoint_y = params[:,1] + 0.5*params[:,3]
-
         for joint_idx in range(self.opt.num_links):
-          # Negative if joints are outside of obstacle, zero at boundary, positive inside.
-          viol_this_joint_x = 0.5*params[:,2] - torch.abs(q_all_joints[joint_idx][:,0] - midpoint_x)
-          viol_this_joint_y = 0.5*params[:,3] - torch.abs(q_all_joints[joint_idx][:,1] - midpoint_y)
+          viol_this_joint_x, viol_this_joint_y = piecewise_obstacle_penalty(
+            q_all_joints[joint_idx][:,0], q_all_joints[joint_idx][:,1],
+            params[:,0], params[:,1], params[:,2], params[:,3],
+            inside_slope=1.0, outside_slope=0.1)
           obstacle_violations[ctr] = viol_this_joint_x.sum()
           obstacle_violations[ctr+1] = viol_this_joint_y.sum()
           ctr += 2
