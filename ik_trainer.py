@@ -311,7 +311,9 @@ class IkLagrangeDualTrainer(object):
 
     # Compute the loss using the current Lagrangian multipliers.
     joint_angle_l2 = 0.5 * pred_joint_theta**2
-    outputs["joint_angle_l2"] = joint_angle_l2.mean()
+
+    # NOTE: The joint angle L2 loss isn't that important, so downweight it...
+    outputs["joint_angle_l2"] = 0.01 * joint_angle_l2.mean()
 
     position_err_sq = 0.5 * (q_ee_desired[:,:2] - q_ee_actual[:,:2])**2
     outputs["position_err_sq"] = position_err_sq
