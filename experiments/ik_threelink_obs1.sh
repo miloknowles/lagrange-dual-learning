@@ -3,7 +3,7 @@
 
 # Now run the training pipeline.
 python ../ik_trainer_main.py \
-  --model_name ik_threelink_obs1_base_03 \
+  --model_name ik_threelink_obs1_base_04 \
   --config_file ./resources/cfg_joint_limits_and_1obs_static.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
