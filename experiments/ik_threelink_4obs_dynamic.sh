@@ -3,7 +3,7 @@
 
 # Now run the training pipeline.
 python ../ik_trainer_main.py \
-  --model_name ik_threelink_4obs_dynamic_04 \
+  --model_name ik_threelink_4obs_dynamic_05 \
   --config_file ./resources/cfg_joint_limits_and_4obs_dynamic.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
@@ -11,7 +11,7 @@ python ../ik_trainer_main.py \
   --initial_lambda 1 \
   --lagrange_iters 2000 \
   --train_iters 500 \
-  --batch_size 8 \
+  --batch_size 1 \
   --train_dataset_size 40000 \
   --val_dataset_size 4000 \
   --model_save_hz 50 \
@@ -19,4 +19,4 @@ python ../ik_trainer_main.py \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
   --penalty_good_slope 0.005 \
   --penalty_bad_slope 1.0 \
-  # --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_03/models/weights_200/ \
+  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_4obs_dynamic_04/models/weights_1950 \
