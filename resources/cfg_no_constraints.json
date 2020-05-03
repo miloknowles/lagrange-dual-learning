@@ -4,11 +4,14 @@
     "obstacles": []
   },
   "dynamic_constraints": {
-    "random_ee_goal": true,
     "random_obstacles": false,
     "random_obstacles_num": 0,
-    "random_obstacle_width": 0,
-    "random_obstacle_height": 0
+    "random_obstacles_template": {
+      "type": "circle",
+      "radius": 0.4,
+      "x": 1.0,
+      "y": 1.0
+    }
   },
   "enforce_joint_limits": false,
   "enforce_obstacles": false

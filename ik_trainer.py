@@ -67,19 +67,17 @@ class IkLagrangeDualTrainer(object):
       if self.json_config["dynamic_constraints"]["random_obstacles"] == True:
         num_dynamic_obstacles = self.json_config["dynamic_constraints"]["random_obstacles_num"]
         print("NOTE: Config file says to generate {} dynamic obstacles".format(num_dynamic_obstacles))
-        num_lagrange_multipliers += 2*self.opt.num_links*num_dynamic_obstacles
+        num_lagrange_multipliers += self.opt.num_links*num_dynamic_obstacles
         for oi in range(num_dynamic_obstacles):
           for ji in range(self.opt.num_links):
-            for x_or_y in ("x", "y"):
-              self.constraint_names.append("DYN_OB{}_J{}_{}".format(oi+1, ji+1, x_or_y))
+            self.constraint_names.append("DYN_OB{}_J{}".format(oi+1, ji+1))
       else:
         num_static_obstacles = len(self.json_config["static_constraints"]["obstacles"])
         print("NOTE: Found {} STATIC obstacles in config file".format(num_static_obstacles))
-        num_lagrange_multipliers += 2*self.opt.num_links*num_static_obstacles
+        num_lagrange_multipliers += self.opt.num_links*num_static_obstacles
         for oi in range(num_static_obstacles):
           for ji in range(self.opt.num_links):
-            for x_or_y in ("x", "y"):
-              self.constraint_names.append("STAT_OB{}_J{}_{}".format(oi+1, ji+1, x_or_y))
+            self.constraint_names.append("STAT_OB{}_J{}".format(oi+1, ji+1))
 
     assert(num_lagrange_multipliers == len(self.constraint_names))
 
@@ -123,8 +121,6 @@ class IkLagrangeDualTrainer(object):
                 os.path.join(self.opt.load_weights_folder, "model.pth"),
                 os.path.join(self.opt.load_weights_folder, "adam.pth"))
 
-    # print("==> PROBLEM CONSTRAINT CONFIGURATION:")
-    # print(json.dumps(self.json_config, indent=2))
     if self.opt.cache_save_path is not None:
       cache_save_path_fmt = os.path.join(self.opt.cache_save_path, "{}_{}.pt")
       cache_save_path_train = cache_save_path_fmt.format(self.opt.model_name, "train")
@@ -180,7 +176,7 @@ class IkLagrangeDualTrainer(object):
 
     forw_kinematics_function = {
       3: ForwardKinematicsThreeLinkTorch,
-      8: ForwardKinematicsEightLinkTorch
+      # 8: ForwardKinematicsEightLinkTorch
     }[self.opt.num_links]
 
     q_all_joints = forw_kinematics_function(pred_joint_theta)
@@ -215,25 +211,33 @@ class IkLagrangeDualTrainer(object):
         assert("dynamic_obstacles" in inputs)
         num_obstacles = self.json_config["dynamic_constraints"]["random_obstacles_num"]
         obstacle_params = inputs["dynamic_obstacles"] # Shape (b, 4, 4).
+        obstacle_type = self.json_config["dynamic_constraints"]["random_obstacles_template"]["type"]
       else:
         num_obstacles = len(self.json_config["static_constraints"]["obstacles"])
-        obstacle_params = torch.Tensor(self.json_config["static_constraints"]["obstacles"]).to(self.device)
-        obstacle_params = obstacle_params.unsqueeze(0).expand(this_batch_size, -1, -1) # Shape (b, 4, 4).
+        obstacle_type = None if num_obstacles == 0 else self.json_config["static_constraints"]["obstacles"][0]["type"]
+        obstacle_params = torch.zeros(this_batch_size, 4, 4)
+        for obst_idx, obst_json in enumerate(self.json_config["static_constraints"]["obstacles"]):
+          assert(obst_json["type"] == "circle")
+          obstacle_params[:,obst_idx,0] = obst_json["x"]
+          obstacle_params[:,obst_idx,1] = obst_json["y"]
+          obstacle_params[:,obst_idx,2] = obst_json["radius"]
+          obstacle_params[:,obst_idx,3] = -1
+
+      obstacle_params = obstacle_params.to(self.device)
 
       # Handle static and dynamic objects with the same penalty.
-      obstacle_violations = torch.zeros(2*self.opt.num_links*num_obstacles).to(self.device)
+      obstacle_violations = torch.zeros(self.opt.num_links*num_obstacles).to(self.device)
 
       for obst_idx in range(num_obstacles):
         params = obstacle_params[:,obst_idx]
+        ox, oy, radius, _ = params[:,0], params[:,1], params[:,2], params[:,3]
         for joint_idx in range(self.opt.num_links):
-          viol_this_joint_x, viol_this_joint_y = piecewise_obstacle_penalty(
-            q_all_joints[joint_idx][:,0], q_all_joints[joint_idx][:,1],
-            params[:,0], params[:,1], params[:,2], params[:,3],
-            inside_slope=self.opt.penalty_bad_slope,
-            outside_slope=self.opt.penalty_good_slope)
-          obstacle_violations[ctr] = viol_this_joint_x.sum()
-          obstacle_violations[ctr+1] = viol_this_joint_y.sum()
-          ctr += 2
+          viol_this_joint = piecewise_circle_penalty(
+            q_all_joints[joint_idx][:,0], q_all_joints[joint_idx][:,1], ox, oy, radius,
+            inside_slope=self.opt.penalty_bad_slope, outside_slope=self.opt.penalty_good_slope
+          )
+          obstacle_violations[ctr] = viol_this_joint.sum()
+          ctr += 1
       viol_to_concat.append(obstacle_violations)
 
     # Combine all of the constraint violations into a 1D Tensor.

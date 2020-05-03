@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from utils.forward_kinematics import *
+from utils.training_utils import *
 
 
 class IkDataset(Dataset):
@@ -54,47 +55,54 @@ class IkDataset(Dataset):
 
     dynamic_obstacles = json_config["dynamic_constraints"]["random_obstacles"]
 
-    def no_joint_collision(q_all_joints, x, y, w, h):
-      for q in q_all_joints:
-        if q[0] >= x and q[0] <= (x+w) and q[1] >= y and q[1] <= (y+h):
-          return False
-
-      if 0 >= x and 0 <= (x+w) and 0 >= y and 0 <= (y+h):
-        return False
-
-      return True
-
     # If obstacles are randomly generated, then we can place them around the joint to avoid collisions.
     self.random_obstacles = None
     if dynamic_obstacles:
       num_obstacles = json_config["dynamic_constraints"]["random_obstacles_num"]
-      width = json_config["dynamic_constraints"]["random_obstacle_width"]
-      height = json_config["dynamic_constraints"]["random_obstacle_height"]
-      print("[DATASET] Generating {} random obstacles for each example (w={} h={})".format(num_obstacles, width, height))
+      print("[DATASET] Generating {} random obstacles for each example".format(num_obstacles))
 
+      # NOTE: Each obstacle can have up to 4 params. In the case of the circle, only 3.
       self.random_obstacles = torch.zeros(len(self.random_ee), 4, 4)
-      self.random_obstacles[:,:,2] = width
-      self.random_obstacles[:,:,3] = height
+      obst_template = json_config["dynamic_constraints"]["random_obstacles_template"]
+      print("[DATASET] Obstacle template:\n", obst_template)
+
+      if obst_template["type"] == "circle":
+        self.random_obstacles[:,:,2] = obst_template["radius"]
+      elif obst_template["type"] == "rectangle":
+        self.random_obstacles[:,:,2] = obst_template["width"]
+        self.random_obstacles[:,:,3] = obst_template["height"]
+      else:
+        raise NotImplementedError("Unknown obstacle type {}".format(obst_template["type"]))
+
+      no_collision_fn = {
+        "rectangle": no_joint_collisions_rectangle,
+        "circle": no_joint_collisions_circle
+      }[obst_template["type"]]
 
       # For each training example, keep generating random obstacles until one isn't in collision.
       for i in range(len(self.random_ee)):
         q_all_joints_this_ex = [q[i] for q in q_all_joints]
         for obst_idx in range(num_obstacles):
-          random_xy = torch.empty(2).uniform_(-1.5 - width, 1.5)
-          while not no_joint_collision(q_all_joints_this_ex, random_xy[0], random_xy[1], width, height):
-            random_xy = torch.empty(2).uniform_(-1.5 - width, 1.5)
+          random_xy = torch.empty(2).uniform_(-1.5, 1.5)
+          while not no_collision_fn(q_all_joints_this_ex, random_xy[0], random_xy[1], obst_template):
+            random_xy = torch.empty(2).uniform_(-1.5, 1.5)
           self.random_obstacles[i,obst_idx,:2] = random_xy
 
-    # If obstacles are static, then remove any joint angles that would cause a collision.
+    # If obstacles are static, keep sampling joint configurations until there are no collisions.
     else:
       print("[DATASET] Filtering dataset with {} static obstacles".format(len(json_config["static_constraints"]["obstacles"])))
       for i in range(len(self.random_ee)):
         q_all_joints_this_ex = [q[i].squeeze(0) for q in q_all_joints]
-        for static_obstacle in json_config["static_constraints"]["obstacles"]:
-          x, y, w, h = static_obstacle
-          while not no_joint_collision(q_all_joints_this_ex, x, y, w, h):
+        for obst_json in json_config["static_constraints"]["obstacles"]:
+          no_collision_fn = {
+            "rectangle": no_joint_collisions_rectangle,
+            "circle": no_joint_collisions_circle
+          }[obst_json["type"]]
+
+          while not no_joint_collisions_circle(q_all_joints_this_ex, obst_json["x"], obst_json["y"], obst_json):
             self.random_theta[i] = torch.empty(J).uniform_(joint_angle_min, joint_angle_max)
             q_all_joints_this_ex = [q.squeeze(0) for q in forw_kinematics_function(self.random_theta[i].unsqueeze(0))]
+
         self.random_ee[i] = q_all_joints_this_ex[0]
 
     # Make a placeholder tensor that network inputs will be made out of.
@@ -107,7 +115,10 @@ class IkDataset(Dataset):
     ]
 
     for i, params in enumerate(self.json_config["static_constraints"]["obstacles"]):
-      inputs_to_concat[2][4*i:4*i+4] = torch.Tensor(params)
+      if params["type"] == "circle":
+        inputs_to_concat[2][4*i:4*i+4] = torch.Tensor([params["x"], params["y"], params["radius"], -1])
+      else:
+        raise NotImplementedError()
 
     self.tensor_template = torch.cat(inputs_to_concat)
 

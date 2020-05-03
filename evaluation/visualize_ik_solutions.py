@@ -33,10 +33,16 @@ def visualize(opt, trainer):
     for i, obst_params in enumerate(trainer.json_config["static_constraints"]["obstacles"]):
       # Make a box with the desired height and width.
       obst_name = "obst_{}".format(i+1)
-      x, y, w, h = obst_params
-      shapes[obst_name].set_object(g.Box([0.1, w, h]))
-      # NOTE: I think the origin of the object is its center? So need to add half width and height.
-      shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
+
+      if obst_params["type"] == "circle":
+        x, y, radius = obst_params["x"], obst_params["y"], obst_params["radius"]
+        shapes[obst_name].set_object(g.Sphere(radius))
+        shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]))
+      else:
+        x, y, w, h = obst_params["x"], obst_params["y"], obst_params["width"], obst_params["height"]
+        shapes[obst_name].set_object(g.Box([0.1, w, h]))
+        # NOTE: I think the origin of the object is its center? So need to add half width and height.
+        shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
 
   position_err = []
   constraint_viol = []
@@ -47,8 +53,8 @@ def visualize(opt, trainer):
       for key in inputs:
         inputs[key] = inputs[key].to(trainer.device).unsqueeze(0)
 
-      # if i == 100:
-        # break
+      if i == 100:
+        break
 
       outputs = trainer.process_batch(inputs, trainer.lamda)
       joint_angles = outputs["pred_joint_theta"].squeeze(0).cpu().numpy()
@@ -69,9 +75,11 @@ def visualize(opt, trainer):
 
           for j in range(random_obstacles_num):
             obst_name = "obst_{}".format(j+1)
-            x, y, w, h = inputs["dynamic_obstacles"].squeeze(0)[j].cpu().numpy().tolist()
-            shapes[obst_name].set_object(g.Box([0.1, w, h]))
-            shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
+            x, y, radius, _ = inputs["dynamic_obstacles"].squeeze(0)[j].cpu().numpy().tolist()
+            shapes[obst_name].set_object(g.Sphere(radius))
+            shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]))
+            # shapes[obst_name].set_object(g.Box([0.1, w, h]))
+            # shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
 
       ee_desired_position = inputs["q_ee_desired"].squeeze(0)[:2].cpu().numpy()
 
@@ -90,7 +98,10 @@ def visualize(opt, trainer):
 
   # How often are any of the obstacles violated?
   obstacle_indices = [i for i in range(len(trainer.constraint_names)) if "OB" in trainer.constraint_names[i]]
+  print(obstacle_indices)
+  print(trainer.constraint_names)
   obstacle_violated = (constraint_viol[:,obstacle_indices] > 0)
+  print(obstacle_violated)
   any_obstacle_violated = (obstacle_violated.sum(axis=1) > 0).sum().item()
 
   for i, name in enumerate(trainer.constraint_names):
