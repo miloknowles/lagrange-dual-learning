@@ -53,8 +53,8 @@ def visualize(opt, trainer):
       for key in inputs:
         inputs[key] = inputs[key].to(trainer.device).unsqueeze(0)
 
-      if i == 100:
-        break
+      # if i == 100:
+        # break
 
       outputs = trainer.process_batch(inputs, trainer.lamda)
       joint_angles = outputs["pred_joint_theta"].squeeze(0).cpu().numpy()
