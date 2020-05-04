@@ -10,7 +10,7 @@ python ../ik_trainer_main.py \
   --batch_size 8 \
   --train_dataset_size 40000 \
   --val_dataset_size 4000 \
-  --model_save_hz 25 \
+  --model_save_hz 50 \
   --hidden_units 100 \
   --penalty_good_slope 0.005 \
   --penalty_bad_slope 1.0 \

@@ -7,7 +7,7 @@ python ../ik_trainer_main.py \
   --initial_lambda 1 \
   --lagrange_iters 2000 \
   --train_iters 500 \
-  --batch_size 1 \
+  --batch_size 8 \
   --train_dataset_size 40000 \
   --val_dataset_size 4000 \
   --model_save_hz 50 \
