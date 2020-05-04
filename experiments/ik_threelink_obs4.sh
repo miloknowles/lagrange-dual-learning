@@ -1,5 +1,5 @@
 python ../ik_trainer_main.py \
-  --model_name ik_threelink_obs4_circ_01 \
+  --model_name ik_threelink_obs4_circ_02 \
   --config_file ./resources/cfg_joint_limits_and_4obs_static.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
@@ -15,4 +15,3 @@ python ../ik_trainer_main.py \
   --penalty_good_slope 0.005 \
   --penalty_bad_slope 1.0 \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
-  # --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_03/models/weights_200/ \

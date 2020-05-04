@@ -54,8 +54,8 @@ def piecewise_circle_penalty(jx, jy, ox, oy, radius, inside_slope=1.0, outside_s
 
   d = torch.sqrt((jx - ox)**2 + (jy - oy)**2)
 
-  viol_inside = -inside_slope*torch.abs(d - radius) + inside_slope*radius
-  viol_outside = -outside_slope*torch.abs(d - radius) + outside_slope*radius
+  viol_inside = -inside_slope * (d - radius)
+  viol_outside = -outside_slope * (d - radius)
 
   return torch.max(viol_inside, viol_outside)
 
