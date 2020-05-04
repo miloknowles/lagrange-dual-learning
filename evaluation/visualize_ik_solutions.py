@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, math
 
 import torch
 from matplotlib import pyplot as plt
@@ -14,6 +14,8 @@ from ik_dataset import IkDataset
 from ik_options import IkOptions
 
 from utils.robot_visualizer import RobotVisualizer
+
+ROTATION_90DEG_Z = tf.rotation_matrix(math.pi / 2, [0, 0, 1])
 
 
 def visualize(opt, trainer):
@@ -36,8 +38,9 @@ def visualize(opt, trainer):
 
       if obst_params["type"] == "circle":
         x, y, radius = obst_params["x"], obst_params["y"], obst_params["radius"]
-        shapes[obst_name].set_object(g.Sphere(radius))
-        shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]))
+        # shapes[obst_name].set_object(g.Sphere(radius))
+        shapes[obst_name].set_object(g.Cylinder(0.1, radius))
+        shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]).dot(ROTATION_90DEG_Z))
       else:
         x, y, w, h = obst_params["x"], obst_params["y"], obst_params["width"], obst_params["height"]
         shapes[obst_name].set_object(g.Box([0.1, w, h]))
@@ -76,8 +79,10 @@ def visualize(opt, trainer):
           for j in range(random_obstacles_num):
             obst_name = "obst_{}".format(j+1)
             x, y, radius, _ = inputs["dynamic_obstacles"].squeeze(0)[j].cpu().numpy().tolist()
-            shapes[obst_name].set_object(g.Sphere(radius))
-            shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]))
+            # shapes[obst_name].set_object(g.Sphere(radius))
+            # shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]))
+            shapes[obst_name].set_object(g.Cylinder(0.1, radius))
+            shapes[obst_name].set_transform(tf.translation_matrix([0, x, y]).dot(ROTATION_90DEG_Z))
             # shapes[obst_name].set_object(g.Box([0.1, w, h]))
             # shapes[obst_name].set_transform(tf.translation_matrix([0, x+0.5*w, y+0.5*h]))
 

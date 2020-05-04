@@ -1,7 +1,3 @@
-# Clean up any previous training sessions under the same name.
-# ../cleanup.sh ik_threelink_4obs_dynamic_02
-
-# Now run the training pipeline.
 python ../ik_trainer_main.py \
   --model_name ik_threelink_obs4_dyn_circ_01 \
   --config_file ./resources/cfg_joint_limits_and_4obs_dynamic.json \
@@ -18,5 +14,5 @@ python ../ik_trainer_main.py \
   --hidden_units 100 \
   --penalty_good_slope 0.005 \
   --penalty_bad_slope 1.0 \
-  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_03/models/weights_200/ \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
+  # --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_03/models/weights_200/ \

@@ -12,7 +12,6 @@ python visualize_ik_solutions.py \
   --val_dataset_size 4000 \
   --model_save_hz 50 \
   --hidden_units 100 \
-  --no_plot \
+  --show_groundtruth_theta \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
   --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_obs4_base_05/models/weights_975 \
-  # --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_obs4_base/weights_200 \

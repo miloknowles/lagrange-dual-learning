@@ -83,9 +83,9 @@ class IkDataset(Dataset):
       for i in range(len(self.random_ee)):
         q_all_joints_this_ex = [q[i] for q in q_all_joints]
         for obst_idx in range(num_obstacles):
-          random_xy = torch.empty(2).uniform_(-1.5, 1.5)
+          random_xy = torch.empty(2).uniform_(-1.2, 1.2)
           while not no_collision_fn(q_all_joints_this_ex, random_xy[0], random_xy[1], obst_template):
-            random_xy = torch.empty(2).uniform_(-1.5, 1.5)
+            random_xy = torch.empty(2).uniform_(-1.2, 1.2)
           self.random_obstacles[i,obst_idx,:2] = random_xy
 
     # If obstacles are static, keep sampling joint configurations until there are no collisions.

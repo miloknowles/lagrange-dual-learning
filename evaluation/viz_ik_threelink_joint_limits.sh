@@ -14,7 +14,4 @@ python visualize_ik_solutions.py \
   --hidden_units 100 \
   --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_03/models/weights_200/ \
   --no_plot \
-  # --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
-# 0.1 ==> /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_01/models/weights_50/ \
-# 0.01 ==> /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_02/models/weights_150/ \
-# --load_weights_folder /home/milo/lagrange-dual-learning/resources/pretrained_models/ik_threelink_joint_limits_base/weights_200 \
+  --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
