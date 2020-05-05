@@ -1,9 +1,9 @@
 python ../ik_trainer_main.py \
-  --model_name ik_threelink_base_01 \
+  --model_name ik_threelink_position_01 \
   --config_file ./resources/cfg_no_constraints.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
-  --optimizer_lr 1e-4 \
+  --optimizer_lr 5e-5 \
   --initial_lambda 40 \
   --lagrange_iters 1000 \
   --train_iters 500 \

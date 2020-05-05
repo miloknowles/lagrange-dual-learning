@@ -7,5 +7,6 @@ python visualize_ik_solutions.py \
   --val_dataset_size 4000 \
   --hidden_units 100 \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
-  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_obs1_circ_01/models/weights_850/ \
   --no_plot \
+  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_obs1_circ_02/models/weights_950/
+  # --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_obs1_circ_01/models/weights_850/ \

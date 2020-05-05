@@ -10,7 +10,7 @@ Project for 6.881 Spring 2020 (Optimization for Machine Learning)
 ## Setup
 
 ### (Optional) Install PyDrake
-I use Drake and meshcat-python for visualization. **They aren't needed for training models, so you can skip these steps if just using the training code.**
+I use **Drake** and **meshcat-python** for visualization. **They aren't needed for training models, so you can skip these steps if just using the training code.**
 
 Installing [PyDrake with Python bindings](https://drake.mit.edu/python_bindings.html):
 ```bash
