@@ -8,5 +8,5 @@ python visualize_ik_solutions.py \
   --hidden_units 100 \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
   --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_obs4_circ_02/models/weights_950 \
-  --no_plot \
+  # --no_plot \
   # --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_obs4_base_05/models/weights_975 \

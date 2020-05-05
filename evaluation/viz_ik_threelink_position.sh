@@ -8,4 +8,4 @@ python visualize_ik_solutions.py \
   --hidden_units 100 \
   --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
   --no_plot \
-  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_position_01/models/weights_450/
+  --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_position_01/models/weights_600/
