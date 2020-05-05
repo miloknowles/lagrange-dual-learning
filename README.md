@@ -1,6 +1,6 @@
-# A lagrange dual approximation for inverse kinematics with constraints
+# A Lagrange Dual Learning Framework for Solving Constrained Inverse Kinematics Tasks
 
-Project for 6.881 Spring 2020 (Optimization for Machine Learning)
+Project for MIT's 6.881 Optimization for Machine Learning course, Spring 2020.
 
 ## Disclaimers
 
