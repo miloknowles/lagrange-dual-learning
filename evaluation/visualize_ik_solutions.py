@@ -64,10 +64,12 @@ def visualize(opt, trainer):
       joint_angles_gt = inputs["joint_theta"].squeeze(0).cpu().numpy()
       print("Predicted joint angles:", joint_angles)
 
-      position_err.append(torch.sqrt(outputs["position_err_sq"]))
+      position_err.append(torch.sqrt(outputs["position_err_sq"].sum()).unsqueeze(0))
       constraint_viol.append(outputs["constraint_violations"].unsqueeze(0))
 
-      if not opt.no_plot:
+      pos_err_last = position_err[-1].squeeze().item()
+
+      if (not opt.no_plot) or (pos_err_last > 0.2):
         if opt.show_groundtruth_theta:
           rviz.DrawRobot(joint_angles_gt)
         else:
@@ -88,7 +90,7 @@ def visualize(opt, trainer):
 
       ee_desired_position = inputs["q_ee_desired"].squeeze(0)[:2].cpu().numpy()
 
-      if not opt.no_plot:
+      if (not opt.no_plot) or (pos_err_last > 0.2):
         rviz.DrawTarget(ee_desired_position, radius=0.2)
         plt.waitforbuttonpress(timeout=-1)
 
