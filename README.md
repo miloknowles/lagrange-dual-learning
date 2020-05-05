@@ -2,6 +2,8 @@
 
 Project for MIT's 6.881 Optimization for Machine Learning course, Spring 2020.
 
+![Inverse kinematics examples](/resources/images/ik1.png)
+
 ## Disclaimers
 
 - This project has only been tested with `Python3.7` and `torch==1.4.0` on Ubuntu 18.04!
