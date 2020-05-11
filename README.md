@@ -4,9 +4,10 @@ Project for MIT's 6.881 Optimization for Machine Learning course, Spring 2020.
 
 ![Inverse kinematics examples](/resources/images/ik1.png)
 
-## Report
+## Report and Video
 
 See `report.pdf` for a project writeup and bibliography.
+See https://www.youtube.com/watch?v=Ozp3JUacsZQ&feature=youtu.be for a quick presentation on the approach.
 
 ## Disclaimers
 
