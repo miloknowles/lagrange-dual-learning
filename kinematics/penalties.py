@@ -2,7 +2,7 @@ import math
 import torch
 
 
-def piecewise_circle_penalty(jx, jy, ox, oy, radius, inside_slope=1.0, outside_slope=0.1):
+def piecewise_circle_penalty(jx, jy, ox, oy, radius, inside_slope=1.0, outside_slope=0.1) -> torch.Tensor:
   """
   Determines the penalty for the point `(jx, jy)` being inside the circular
   obstacle parameterized by the point `(ox, oy)` and radius.
@@ -17,7 +17,7 @@ def piecewise_circle_penalty(jx, jy, ox, oy, radius, inside_slope=1.0, outside_s
   return torch.max(viol_inside, viol_outside)
 
 
-def piecewise_obstacle_penalty(jx, jy, ox, oy, ow, oh, inside_slope=1.0, outside_slope=0.1):
+def piecewise_obstacle_penalty(jx, jy, ox, oy, ow, oh, inside_slope=1.0, outside_slope=0.1) -> torch.Tensor:
   """
   Determines the penalty for the point `(jx, jy)` being inside the obstacle
   parameterized by `(ox, oy, ow, oh)`. The penalty is piecewise linear.
