@@ -2,8 +2,8 @@ import unittest
 
 from utils.robot_visualizer import RobotVisualizer
 from utils.constants import Constants
-from utils.forward_kinematics import *
-from utils.inverse_kinematics import IkThreeLinkMP
+from kinematics.forward_kinematics import *
+from kinematics.inverse_kinematics import IkThreeLinkMP
 
 
 class DrakeIkTest(unittest.TestCase):
@@ -50,7 +50,6 @@ class DrakeIkTest(unittest.TestCase):
     # theta_initial_guess = np.array([0.1, 0, 0])
     # theta_initial_guess = np.array([0.2, 0, 0])
     theta_initial_guess = np.array([0.5, 0, 0])
-
 
     theta_value, result = IkThreeLinkMP(theta_initial_guess, x_ee_desired, theta_ee_desired=None)
 

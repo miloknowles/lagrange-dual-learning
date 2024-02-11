@@ -1,10 +1,8 @@
-import sys
 import shutil
 import json
 import unittest
 import os
 
-sys.path.append("/home/milo/lagrange-dual-learning")
 from scripts.trainer import IkLagrangeDualTrainer
 from kinematics.dataset import IkDataset
 from scripts.options import Options
@@ -17,7 +15,7 @@ class IkDatasetTest(unittest.TestCase):
     dataset = IkDataset(100, 3, json_config, seed=0, cache_save_path=None)
 
   def test_init_no_cache_save(self):
-    cache_save_path = "/home/milo/lagrange-dual-learning/resources/datasets/ik_dataset_test.pt"
+    cache_save_path = "../../resources/datasetsik_dataset_test.pt"
     if os.path.exists(cache_save_path):
       os.remove(cache_save_path)
     with open("/home/milo/lagrange-dual-learning/resources/cfg_joint_limits_and_4obs_dynamic.json", "r") as f:

@@ -8,26 +8,40 @@ from kinematics.penalties import no_joint_collisions_circle, no_joint_collisions
 
 
 class IkDataset(Dataset):
-  """A torch Dataset for inverse kinematics tasks."""
-  def __init__(self, N, J, json_config, seed=0, cache_save_path=None):
+  """A torch `Dataset` for inverse kinematics tasks."""
+  def __init__(self, N: int, J: int, config: dict, seed: int = 0, cache_save_path: str | None = None):
+    """Initialize the dataset.
+
+    Parameters
+    ----------
+    * `N` : The number of examples in the dataset
+    * `J` : The number of links on this robot
+    * `config` : Task related configuration options. See `resources` folder for examples.
+    * `seed` : The random seed to use
+    * `cache_save_path` : An optional save/load path for this dataset. When the
+      dataset is first created, it will be saved to this cache path (assuming
+      one is provided). Then, if the dataset is is every constructed with the
+      same path, it will be loaded from there.
+    """
     super(IkDataset, self).__init__()
     self.N = N    # The number of examples.
     self.J = J    # The number of links on this robot.
-    self.json_config = json_config
+    self.config = config
 
+    # If the dataset is cached already, use that.
     if cache_save_path is not None and os.path.exists(cache_save_path):
-      print("[DATASET] Found cached dataset at {}, loading from there!".format(cache_save_path))
+      print("[IkDataset] Found cached dataset at {}, loading from there!".format(cache_save_path))
       load_dict = torch.load(cache_save_path)
       self.random_theta = load_dict["random_theta"]
       self.random_ee = load_dict["random_ee"]
       self.random_obstacles = load_dict["random_obstacles"]
       self.tensor_template = load_dict["tensor_template"]
     else:
-      print("[DATASET] Initializing dataset from scratch...")
-      self.initialize(N, J, json_config, seed=0, cache_save_path=cache_save_path)
+      print("[IkDataset] Initializing dataset from scratch...")
+      self.initialize(N, J, config, seed=seed)
 
       if cache_save_path is not None:
-        print("[DATASET] Saving the dataset to {}".format(cache_save_path))
+        print("[IkDataset] Saving the dataset to {}".format(cache_save_path))
         save_dict = {}
         save_dict["random_theta"] = self.random_theta
         save_dict["random_ee"] = self.random_ee
@@ -35,14 +49,14 @@ class IkDataset(Dataset):
         save_dict["tensor_template"] = self.tensor_template
         torch.save(save_dict, cache_save_path)
 
-  def initialize(self, N, J, json_config, seed=0, cache_save_path=None):
+  def initialize(self, N: int, J: int, config: dict, seed: int = 0):
     # Generate N random points in R^J.
     torch.manual_seed(seed)
 
-    joint_angle_min = json_config["static_constraints"]["joint_limits"][0]
-    joint_angle_max = json_config["static_constraints"]["joint_limits"][1]
+    joint_angle_min: float = config["static_constraints"]["joint_limits"][0]
+    joint_angle_max: float = config["static_constraints"]["joint_limits"][1]
 
-    print("[DATASET] Joint angle limits:", joint_angle_min, joint_angle_max)
+    print("[IkDataset] Joint angle limits:", joint_angle_min, joint_angle_max)
 
     self.random_theta = torch.empty(N, J).uniform_(joint_angle_min, joint_angle_max)
 
@@ -54,18 +68,18 @@ class IkDataset(Dataset):
     self.random_ee = forw_kinematics_function(self.random_theta)[0]
     q_all_joints = forw_kinematics_function(self.random_theta)
 
-    dynamic_obstacles = json_config["dynamic_constraints"]["random_obstacles"]
+    dynamic_obstacles = config["dynamic_constraints"]["random_obstacles"]
 
     # If obstacles are randomly generated, then we can place them around the joint to avoid collisions.
     self.random_obstacles = None
     if dynamic_obstacles:
-      num_obstacles = json_config["dynamic_constraints"]["random_obstacles_num"]
-      print("[DATASET] Generating {} random obstacles for each example".format(num_obstacles))
+      num_obstacles: int = config["dynamic_constraints"]["random_obstacles_num"]
+      print("[IkDataset] Generating {} random obstacles for each example".format(num_obstacles))
 
       # NOTE: Each obstacle can have up to 4 params. In the case of the circle, only 3.
       self.random_obstacles = torch.zeros(len(self.random_ee), 4, 4)
-      obst_template = json_config["dynamic_constraints"]["random_obstacles_template"]
-      print("[DATASET] Obstacle template:\n", obst_template)
+      obst_template = config["dynamic_constraints"]["random_obstacles_template"]
+      print("[IkDataset] Obstacle template:\n", obst_template)
 
       if obst_template["type"] == "circle":
         self.random_obstacles[:,:,2] = obst_template["radius"]
@@ -91,10 +105,10 @@ class IkDataset(Dataset):
 
     # If obstacles are static, keep sampling joint configurations until there are no collisions.
     else:
-      print("[DATASET] Filtering dataset with {} static obstacles".format(len(json_config["static_constraints"]["obstacles"])))
+      print("[IkDataset] Filtering dataset with {} static obstacles".format(len(config["static_constraints"]["obstacles"])))
       for i in range(len(self.random_ee)):
         q_all_joints_this_ex = [q[i].squeeze(0) for q in q_all_joints]
-        for obst_json in json_config["static_constraints"]["obstacles"]:
+        for obst_json in config["static_constraints"]["obstacles"]:
           no_collision_fn = {
             "rectangle": no_joint_collisions_rectangle,
             "circle": no_joint_collisions_circle
@@ -107,7 +121,7 @@ class IkDataset(Dataset):
         self.random_ee[i] = q_all_joints_this_ex[0]
 
     # Make a placeholder tensor that network inputs will be made out of.
-    joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"])
+    joint_limits = torch.Tensor(self.config["static_constraints"]["joint_limits"])
 
     inputs_to_concat = [
       torch.zeros(2),
@@ -115,7 +129,7 @@ class IkDataset(Dataset):
       torch.zeros(16)
     ]
 
-    for i, params in enumerate(self.json_config["static_constraints"]["obstacles"]):
+    for i, params in enumerate(self.config["static_constraints"]["obstacles"]):
       if params["type"] == "circle":
         inputs_to_concat[2][4*i:4*i+4] = torch.Tensor([params["x"], params["y"], params["radius"], -1])
       else:

@@ -9,7 +9,7 @@ from utils.training_utils import (
   get_best_system_device, save_model, save_multipliers, load_model, count_parameters
 )
 import utils.paths as paths
-from models.simple_networks import SimpleNetwork
+from models.simple_network import SimpleNetwork
 from kinematics.forward_kinematics import ForwardKinematicsEightLinkTorch, ForwardKinematicsThreeLinkTorch
 from kinematics.dataset import IkDataset
 from kinematics.penalties import piecewise_joint_limit_penalty, piecewise_circle_penalty

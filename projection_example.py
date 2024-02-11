@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 import matplotlib.pyplot as plt
 import numpy as np
 
-from models.simple_networks import *
+from models.simple_network import *
 
 
 def plot_points_3d(points1, points2, coord_min, coord_max, downsample=None):

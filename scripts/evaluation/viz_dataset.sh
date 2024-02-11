@@ -14,4 +14,4 @@ python visualize_ik_solutions.py \
   --hidden_units 100 \
   --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_4obs_dynamic_05/models/weights_550 \
   --show_groundtruth_theta \
-  --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
+  --cache_save_path ../../resources/datasets \

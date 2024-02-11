@@ -8,4 +8,4 @@ python visualize_ik_solutions.py \
   --hidden_units 100 \
   --load_weights_folder /home/milo/lagrange-dual-learning/training_logs/ik_threelink_joint_limits_base_03/models/weights_200/ \
   --no_plot \
-  --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
+  --cache_save_path ../../resources/datasets \

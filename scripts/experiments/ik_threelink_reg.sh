@@ -1,6 +1,6 @@
 ../cleanup.sh ik_threelink_reg
 
-python ../ik_trainer_main.py \
+python ../train.py \
   --model_name ik_threelink_reg \
   --config_file ./resources/cfg_joint_limits_and_4obs_static.json \
   --num_links 3 \

@@ -1,4 +1,4 @@
-python ../ik_trainer_main.py \
+python ../train.py \
   --model_name ik_threelink_position_01 \
   --config_file ./resources/cfg_no_constraints.json \
   --num_links 3 \

@@ -1,4 +1,4 @@
-python ../ik_trainer_main.py \
+python ../train.py \
   --model_name ik_threelink_joint_limits_base_03 \
   --config_file ./resources/cfg_joint_limits.json \
   --num_links 3 \

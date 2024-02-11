@@ -4,3 +4,6 @@
 pydrake_examples/
 training_logs/
 resources/datasets/
+
+.pytest_cache/
+__pycache__
