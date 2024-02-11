@@ -16,8 +16,8 @@ Simply run `pipenv install` from the top directory.
 
 ### Installing Drake on Mac
 
-Depending on your environment, you may be able to simply install (Drake)[https://drake.mit.edu/installation.html] via `pip install drake`.
+Depending on your environment, you may be able to simply install [Drake](https://drake.mit.edu/installation.html) via `pip install drake`.
 
-In my case on Mac M2, I had to install from a (downloaded archive)[https://drake.mit.edu/from_binary.html#stable-releases].
+In my case on Mac M2, I had to install from a [downloaded archive](https://drake.mit.edu/from_binary.html#stable-releases).
 
 Note that  **Drake is not needed for training models, only visualization and testing.**
