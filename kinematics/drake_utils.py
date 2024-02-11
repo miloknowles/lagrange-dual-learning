@@ -1,7 +1,7 @@
 import numpy as np
 import pydrake.symbolic as sym
 
-from .constants import Constants
+from ..utils.constants import Constants
 
 
 def ForwardKinematicsTwoLinkConstraint(theta):

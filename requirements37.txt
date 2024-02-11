@@ -1,4 +1,0 @@
-tensorboardX
-tensorboard
-git-python
-torch>=1.4.0

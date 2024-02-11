@@ -9,9 +9,9 @@ import meshcat.transformations as tf
 
 # Hack, but avoids annoying import errors.
 sys.path.append("/home/milo/lagrange-dual-learning/")
-from ik_trainer import IkLagrangeDualTrainer
-from ik_dataset import IkDataset
-from ik_options import IkOptions
+from scripts.trainer import IkLagrangeDualTrainer
+from kinematics.dataset import IkDataset
+from scripts.options import Options
 
 from utils.robot_visualizer import RobotVisualizer
 
@@ -120,7 +120,7 @@ def visualize(opt, trainer):
 
 
 if __name__ == "__main__":
-  opt = IkOptions()
+  opt = Options()
   trainer = IkLagrangeDualTrainer(opt.parse())
   visualize(opt.parse(), trainer)
 

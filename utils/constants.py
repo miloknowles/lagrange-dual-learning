@@ -1,7 +1,5 @@
-import math
-
-
 class Constants:
+  """Constants for the manipulator."""
   # Two-Link Robot Arm
   R2_LENGTH1 = 1.0
   R2_LENGTH2 = 1.0

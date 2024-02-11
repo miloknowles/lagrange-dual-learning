@@ -1,55 +1,70 @@
-import math, os, json, time, pickle
+import sys; sys.path.append(".."); sys.path.append("../../")
+import os, json, time
 
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-from utils.constants import Constants
-from utils.forward_kinematics import *
-from utils.ema import ExponentialMovingAverage
-from utils.training_utils import *
-from models.simple_networks import *
-from models.residual_network import *
-from ik_dataset import IkDataset
+from utils.training_utils import (
+  get_best_system_device, save_model, save_multipliers, load_model, count_parameters
+)
+import utils.paths as paths
+from models.simple_networks import SimpleNetwork
+from kinematics.forward_kinematics import ForwardKinematicsEightLinkTorch, ForwardKinematicsThreeLinkTorch
+from kinematics.dataset import IkDataset
+from kinematics.penalties import piecewise_joint_limit_penalty, piecewise_circle_penalty
 
 import git
 from tensorboardX import SummaryWriter
 
+device = get_best_system_device()
+
 
 class IkLagrangeDualTrainer(object):
   """
-  Train a network to approximate inverse kinematics solutions for a three link robotic arm.
+  Train a network to approximate inverse kinematics solutions for a three link
+  robotic arm.
 
-  min { ||theta||^2 }                    ==> Minimize L2 norm of joint angles.
-  s.t. ||f(theta) - ee_desired|| = 0     ==> Such that end effector is at desired position.
+  Notes
+  -----
+  The training objective is to:
 
-  Network Inputs:
-   - desired x
-   - desired y
-   - joint limit min
-   - joint limit max
-   - obstacle 1 params (4)
-   - obstacle 2 params (4)
-   - obstacle 3 params (4)
-   - obstacle 4 params (4)
+  Minimize the L2 norm of the arm's joint angles:
+    `min { || theta ||^2 }`              
+  
+  Such that end effector is at the desired position:
+    `|| f(theta) - ee_desired || = 0`
 
-  Total = 20
+  Input dimensionality (total 20):
+   - desired x (float)
+   - desired y (float)
+   - joint limit min (float)
+   - joint limit max (float)
+   - obstacle 1 params (4 x float)
+   - obstacle 2 params (4 x float)
+   - obstacle 3 params (4 x float)
+   - obstacle 4 params (4 x float)
+
+  For more information, please see the report PDF.
   """
   def __init__(self, opt):
     torch.backends.cudnn.benchmark = True
 
     self.opt = opt
 
-    config_file_path = os.path.join("/home/milo/lagrange-dual-learning/", self.opt.config_file)
-    with open(config_file_path, 'r') as f:
+    with open(self.opt.config_file, 'r') as f:
       self.json_config = json.load(f)
 
-    self.device = torch.device("cuda")
-
-    num_network_inputs = 20
+    input_dim = 20
 
     # The network outputs a joint angle for each of the links.
-    self.model = EightLayerNetwork(num_network_inputs, self.opt.num_links, hidden_units=self.opt.hidden_units).to(self.device)
+    self.model = SimpleNetwork(
+      input_dim,
+      self.opt.num_links,
+      hidden_units=self.opt.hidden_units,
+      depth=8,
+      dropout=0.05
+    ).to(device)
 
     self.optimizer = Adam(self.model.parameters(), lr=self.opt.optimizer_lr, betas=(0.9, 0.999))
 
@@ -81,7 +96,7 @@ class IkLagrangeDualTrainer(object):
 
     assert(num_lagrange_multipliers == len(self.constraint_names))
 
-    self.lamda = self.opt.initial_lambda * torch.ones(num_lagrange_multipliers).to(self.device)
+    self.lambda_multipliers = self.opt.initial_lambda * torch.ones(num_lagrange_multipliers).to(device)
 
     self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
     os.makedirs(self.log_path, exist_ok=True)
@@ -100,26 +115,30 @@ class IkLagrangeDualTrainer(object):
 
     self.writer = SummaryWriter(logdir=self.log_path)
 
-    print("========== TRAINING SETTINGS ==========")
-    print("Model parameters:\n  ", count_parameters(self.model))
-    print("Lagrange iters:\n  ", self.opt.lagrange_iters)
-    print("Train iters:\n  ", self.opt.train_iters)
-    print("Train dataset size:\n  ", self.opt.train_dataset_size)
-    print("Validation dataset size:\n", self.opt.val_dataset_size)
-    print("Num workers:\n  ", self.opt.num_workers)
-    print("Num Lagrange multipliers:\n  ", len(self.lamda))
-    print("Initial multiplier values:\n  ", self.opt.initial_lambda)
-    print("Logging to:\n  ", self.log_path)
-    print("Config file:\n  ", self.opt.config_file)
-    print("Load weights folder:\n  ", self.opt.load_weights_folder)
-    print("Load adam state?\n  ", self.opt.load_adam)
+    print("=======================================\n")
+    print("OPTIONS:")
+    print(" Model parameters:\n  ", count_parameters(self.model))
+    print(" Lagrange iters:\n  ", self.opt.lagrange_iters)
+    print(" Train iters:\n  ", self.opt.train_iters)
+    print(" Train dataset size:\n  ", self.opt.train_dataset_size)
+    print(" Validation dataset size:\n", self.opt.val_dataset_size)
+    print(" Num workers:\n  ", self.opt.num_workers)
+    print(" Num Lagrange multipliers:\n  ", len(self.lambda_multipliers))
+    print(" Initial multiplier values:\n  ", self.opt.initial_lambda)
+    print(" Logging to:\n  ", self.log_path)
+    print(" Config file:\n  ", self.opt.config_file)
+    print(" Load weights folder:\n  ", self.opt.load_weights_folder)
+    print(" Load adam state?\n  ", self.opt.load_adam)
     print("=======================================\n")
 
     if self.opt.load_weights_folder is not None:
       print("NOTE: Load weights path given, going to load model...")
-      load_model(self.model, self.optimizer if self.opt.load_adam else None,
-                os.path.join(self.opt.load_weights_folder, "model.pth"),
-                os.path.join(self.opt.load_weights_folder, "adam.pth"))
+      load_model(
+        self.model,
+        self.optimizer if self.opt.load_adam else None,
+        os.path.join(self.opt.load_weights_folder, "model.pth"),
+        os.path.join(self.opt.load_weights_folder, "adam.pth")
+      )
 
     if self.opt.cache_save_path is not None:
       cache_save_path_fmt = os.path.join(self.opt.cache_save_path, "{}_{}.pt")
@@ -136,25 +155,6 @@ class IkLagrangeDualTrainer(object):
     self.train_loader = DataLoader(self.train_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
     self.val_loader = DataLoader(self.val_dataset, self.opt.batch_size, True, num_workers=self.opt.num_workers)
 
-  def main(self):
-    """
-    Main training loop.
-    """
-    for epoch in range(self.opt.lagrange_iters):
-      epoch_start_time = time.time()
-
-      self.train_with_relaxation(self.lamda)
-      train_time = time.time() - epoch_start_time
-
-      self.lamda = self.update_multipliers(self.lamda)
-      mult_time = time.time() - epoch_start_time - train_time
-
-      self.validate(epoch, self.lamda, train_time, mult_time)
-
-      # Periodically save the model weights, multipliers and Adam state.
-      if epoch % self.opt.model_save_hz == 0 and epoch > 0:
-        save_model(self.model, self.optimizer, os.path.join(self.log_path, "models"), epoch)
-        save_multipliers(self.lamda, os.path.join(self.log_path, "models"), epoch)
 
   def process_batch(self, inputs, lamda):
     """
@@ -163,11 +163,11 @@ class IkLagrangeDualTrainer(object):
     outputs = {}
 
     for key in inputs:
-      inputs[key] = inputs[key].to(self.device)
+      inputs[key] = inputs[key].to(device)
 
     this_batch_size = len(inputs["q_ee_desired"])
 
-    joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"]).unsqueeze(0).expand(this_batch_size, -1).to(self.device)
+    joint_limits = torch.Tensor(self.json_config["static_constraints"]["joint_limits"]).unsqueeze(0).expand(this_batch_size, -1).to(device)
 
     pred_joint_theta = self.model(inputs["input_tensor"])
     outputs["pred_joint_theta"] = pred_joint_theta
@@ -196,7 +196,7 @@ class IkLagrangeDualTrainer(object):
 
     # Optionally constraint joint angles to be within a certain range.
     if self.json_config["enforce_joint_limits"] == True:
-      joint_limit_violations = torch.zeros(self.opt.num_links).to(self.device)
+      joint_limit_violations = torch.zeros(self.opt.num_links).to(device)
       for joint_idx in range(self.opt.num_links):
         joint_limit_violations[joint_idx] = piecewise_joint_limit_penalty(
           pred_joint_theta[:,joint_idx], joint_limits[:,0], joint_limits[:,1],
@@ -223,10 +223,10 @@ class IkLagrangeDualTrainer(object):
           obstacle_params[:,obst_idx,2] = obst_json["radius"]
           obstacle_params[:,obst_idx,3] = -1
 
-      obstacle_params = obstacle_params.to(self.device)
+      obstacle_params = obstacle_params.to(device)
 
       # Handle static and dynamic objects with the same penalty.
-      obstacle_violations = torch.zeros(self.opt.num_links*num_obstacles).to(self.device)
+      obstacle_violations = torch.zeros(self.opt.num_links*num_obstacles).to(device)
 
       for obst_idx in range(num_obstacles):
         params = obstacle_params[:,obst_idx]
@@ -241,7 +241,7 @@ class IkLagrangeDualTrainer(object):
       viol_to_concat.append(obstacle_violations)
 
     # Combine all of the constraint violations into a 1D Tensor.
-    outputs["constraint_violations"] = torch.cat(viol_to_concat).to(self.device)
+    outputs["constraint_violations"] = torch.cat(viol_to_concat).to(device)
 
     # Each constraint violation is weighted by its corresponding multiplier.
     outputs["lagrange_loss"] = (lamda * outputs["constraint_violations"]).sum()
@@ -250,8 +250,8 @@ class IkLagrangeDualTrainer(object):
 
   def train_with_relaxation(self, lamda):
     """
-    Do one training epoch of the model on a Lagrangian relaxation parameterized by the current
-    multipliers lambda.
+    Do one training epoch of the model on a Lagrangian relaxation parameterized
+    by the current multipliers lambda.
     """
     # Train the self.model using the current Lagrange relaxation.
     # random_indices = torch.randperm(len(self.train_loader))[:self.opt.train_iters]
@@ -266,11 +266,12 @@ class IkLagrangeDualTrainer(object):
 
   def update_multipliers(self, lamda):
     """
-    Do a single update step on the Lagrange multipliers based on constraint violations.
+    Do a single update step on the Lagrange multipliers based on constraint
+    violations.
     """
     # Aggregate constraint violations across all of the training examples.
     with torch.no_grad():
-      total_constraint_violations = torch.zeros(len(self.val_loader), len(lamda)).to(self.device)
+      total_constraint_violations = torch.zeros(len(self.val_loader), len(lamda)).to(device)
 
       for ti, inputs in enumerate(self.val_loader):
         outputs = self.process_batch(inputs, lamda)
@@ -320,3 +321,21 @@ class IkLagrangeDualTrainer(object):
         global_step=epoch)
 
     self.writer.close()
+
+  def main(self):
+    """The main training loop."""
+    for epoch in range(self.opt.lagrange_iters):
+      epoch_start_time = time.time()
+
+      self.train_with_relaxation(self.lambda_multipliers)
+      train_time = time.time() - epoch_start_time
+
+      self.lambda_multipliers = self.update_multipliers(self.lambda_multipliers)
+      mult_time = time.time() - epoch_start_time - train_time
+
+      self.validate(epoch, self.lambda_multipliers, train_time, mult_time)
+
+      # Periodically save the model weights, multipliers and Adam state.
+      if epoch % self.opt.model_save_hz == 0 and epoch > 0:
+        save_model(self.model, self.optimizer, os.path.join(self.log_path, "models"), epoch)
+        save_multipliers(self.lambda_multipliers, os.path.join(self.log_path, "models"), epoch)

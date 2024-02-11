@@ -4,7 +4,7 @@ import numpy as np
 from pydrake.all import MathematicalProgram
 import pydrake.solvers.mathematicalprogram as mp
 
-from utils.forward_kinematics import *
+from kinematics.drake_utils import ForwardKinematicsThreeLinkConstraint
 
 
 def IkThreeLinkMP(theta_guess, x_ee_desired, theta_ee_desired=None):

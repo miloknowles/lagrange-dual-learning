@@ -1,15 +1,13 @@
-import os
+import sys; sys.path.append(".."); sys.path.append("../../")
 import argparse
+from utils.paths import top_folder
 
-import torch
-
-
-class IkOptions(object):
+class Options(object):
   def __init__(self):
     self.parser = argparse.ArgumentParser(description="Options for the IkLagrangeDualTrainer")
 
     self.parser.add_argument("--model_name", type=str, help="The name of this experiment/model")
-    self.parser.add_argument("--log_dir", type=str, default="/home/milo/lagrange-dual-learning/training_logs",
+    self.parser.add_argument("--log_dir", type=str, default=top_folder("training_logs"),
                              help="Where to save models and tensorboard events")
     self.parser.add_argument("--lagrange_iters", type=int, default=1000, help="Number of lagrange dual epochs")
     self.parser.add_argument("--train_iters", type=int, default=500, help="Number of training iterations for each relaxation")

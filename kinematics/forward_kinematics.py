@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from .constants import Constants
+from utils.constants import Constants
 
 
 def ForwardKinematicsTwoLink(theta):

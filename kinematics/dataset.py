@@ -1,13 +1,14 @@
 import os
 
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
-from utils.forward_kinematics import *
-from utils.training_utils import *
+from kinematics.forward_kinematics import ForwardKinematicsThreeLinkTorch, ForwardKinematicsEightLinkTorch
+from kinematics.penalties import no_joint_collisions_circle, no_joint_collisions_rectangle
 
 
 class IkDataset(Dataset):
+  """A torch Dataset for inverse kinematics tasks."""
   def __init__(self, N, J, json_config, seed=0, cache_save_path=None):
     super(IkDataset, self).__init__()
     self.N = N    # The number of examples.
@@ -122,10 +123,10 @@ class IkDataset(Dataset):
 
     self.tensor_template = torch.cat(inputs_to_concat)
 
-  def __len__(self):
+  def __len__(self) -> int:
     return self.random_theta.shape[0]
 
-  def __getitem__(self, index):
+  def __getitem__(self, index: int) -> dict:
     output = {}
     output["input_tensor"] = self.tensor_template.clone()
     output["input_tensor"][0:2] = self.random_ee[index,:2]

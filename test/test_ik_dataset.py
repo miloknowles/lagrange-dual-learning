@@ -5,9 +5,9 @@ import unittest
 import os
 
 sys.path.append("/home/milo/lagrange-dual-learning")
-from ik_trainer import IkLagrangeDualTrainer
-from ik_dataset import IkDataset
-from ik_options import IkOptions
+from scripts.trainer import IkLagrangeDualTrainer
+from kinematics.dataset import IkDataset
+from scripts.options import Options
 
 
 class IkDatasetTest(unittest.TestCase):
@@ -30,7 +30,7 @@ class IkDatasetTest(unittest.TestCase):
       print(inputs["input_tensor"])
 
   def test_random_loader(self):
-    opt = IkOptions().parse_default()
+    opt = Options().parse_default()
     trainer = IkLagrangeDualTrainer(opt)
 
     unique_examples = set()

@@ -1,6 +1,6 @@
-python ../ik_trainer_main.py \
+python ../train.py \
   --model_name ik_threelink_obs1_circ_02 \
-  --config_file ./resources/cfg_joint_limits_and_1obs_static.json \
+  --config_file ../../resources/cfg_joint_limits_and_1obs_static.json \
   --num_links 3 \
   --multiplier_lr 1e-4 \
   --optimizer_lr 5e-5 \
@@ -14,4 +14,4 @@ python ../ik_trainer_main.py \
   --hidden_units 100 \
   --penalty_good_slope 0.005 \
   --penalty_bad_slope 1.0 \
-  --cache_save_path /home/milo/lagrange-dual-learning/resources/datasets/ \
+  --cache_save_path ../../resources/datasets/ \
