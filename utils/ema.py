@@ -1,6 +1,3 @@
-import torch
-
-
 class ExponentialMovingAverage(object):
   def __init__(self, initial_value, smoothing_factor=2):
     self.ema = initial_value

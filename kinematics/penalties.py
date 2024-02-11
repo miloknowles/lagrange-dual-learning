@@ -4,8 +4,8 @@ import torch
 
 def piecewise_circle_penalty(jx, jy, ox, oy, radius, inside_slope=1.0, outside_slope=0.1):
   """
-  Determines the penalty for the point (jx, jy) being inside the circular obstacle parameterized
-  by the point (ox, oy) and radius.
+  Determines the penalty for the point `(jx, jy)` being inside the circular
+  obstacle parameterized by the point `(ox, oy)` and radius.
   """
   assert(inside_slope >= 0 and outside_slope >= 0)
 
@@ -19,8 +19,8 @@ def piecewise_circle_penalty(jx, jy, ox, oy, radius, inside_slope=1.0, outside_s
 
 def piecewise_obstacle_penalty(jx, jy, ox, oy, ow, oh, inside_slope=1.0, outside_slope=0.1):
   """
-  Determines the penalty for the point (jx, jy) being inside the obstacle parameterized by
-  (ox, oy, ow, oh). The penalty is piecewise linear.
+  Determines the penalty for the point `(jx, jy)` being inside the obstacle
+  parameterized by `(ox, oy, ow, oh)`. The penalty is piecewise linear.
   """
   assert(inside_slope >= 0 and outside_slope >= 0)
 

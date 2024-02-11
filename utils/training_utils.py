@@ -2,8 +2,15 @@ import os
 import torch
 
 
-def save_model(model, adam, folder, epoch):
-  """Save model and optimizer parameters."""
+def save_model(
+  model: torch.nn.Module, adam: torch.optim.Optimizer, folder: str, epoch: int
+) -> str:
+  """Save model and optimizer parameters.
+  
+  Returns
+  -------
+  The path where the model and optimizer are saved.
+  """
   os.makedirs(os.path.join(folder, "weights_{}".format(epoch)), exist_ok=True)
 
   model_save_path = os.path.join(folder, "weights_{}".format(epoch), "model.pth")
@@ -16,8 +23,15 @@ def save_model(model, adam, folder, epoch):
   return model_save_path, None if adam is None else adam_save_path
 
 
-def load_model(model, adam, model_path, adam_path):
-  """Load a model and optimizer from checkpoints."""
+def load_model(
+  model: torch.nn.Module, adam: torch.optim.Optimizer, model_path: str, adam_path: str
+) -> tuple[torch.nn.Module, torch.optim.Adam]:
+  """Load a model and optimizer from checkpoints.
+  
+  Returns
+  -------
+  The loaded model and Adam optimizer.
+  """
   model_dict = model.state_dict()
   saved_model_dict = torch.load(model_path)
   saved_model_dict = {k: v for k, v in saved_model_dict.items() if k in model_dict}
@@ -33,17 +47,22 @@ def load_model(model, adam, model_path, adam_path):
   return model, adam
 
 
-def save_multipliers(lamda, folder, epoch):
-  """Save Lagrange multipliers."""
+def save_multipliers(lambda_multipliers: torch.Tensor, folder: str, epoch: int) -> str:
+  """Save Lagrange multipliers.
+  
+  Returns
+  -------
+  The path where the multipliers are saved.
+  """
   os.makedirs(os.path.join(folder, "weights_{}".format(epoch)), exist_ok=True)
-  mult_save_path = os.path.join(folder, "weights_{}".format(epoch), "multipliers.pth")
-  torch.save(lamda, mult_save_path)
+  outpath = os.path.join(folder, "weights_{}".format(epoch), "multipliers.pth")
+  torch.save(lambda_multipliers, outpath)
 
-  return mult_save_path
+  return outpath
 
 
 # From: https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/8
-def count_parameters(model):
+def count_parameters(model) -> int:
   """Count the parameters of a model."""
   return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
